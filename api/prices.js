@@ -7,6 +7,10 @@ export default async function handler(req, res) {
   const tdKey = process.env.TWELVE_DATA_API_KEY;
   const fhKey = process.env.FINNHUB_API_KEY;
 
+  if (!tdKey) {
+    return res.status(500).json({ error: "Missing TWELVE_DATA_API_KEY" });
+  }
+
   const raw = req.query.symbols || '';
   const tickers = [...new Set(
     raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
@@ -21,19 +25,24 @@ export default async function handler(req, res) {
 
   async function fetchJSON(url) {
     const r = await fetch(url);
-    return await r.json();
+    const t = await r.text();
+    return JSON.parse(t);
   }
 
-  async function fetchTwelve(ticker) {
+  // ✅ Twelve Data
+  async function fetchTwelve(t) {
     try {
       const data = await fetchJSON(
-        `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`
+        `https://api.twelvedata.com/quote?symbol=${t}&apikey=${tdKey}`
       );
 
       if (data.status === "error") return null;
 
+      const price = Number(data.close);
+      if (!price || price <= 0) return null;
+
       return {
-        price: Number(data.close),
+        price,
         change: Number(data.percent_change || 0),
         prev: Number(data.previous_close || 0)
       };
@@ -42,18 +51,20 @@ export default async function handler(req, res) {
     }
   }
 
-  async function fetchFinnhub(ticker) {
+  // ✅ Finnhub fallback
+  async function fetchFinnhub(t) {
     if (!fhKey) return null;
 
     try {
       const data = await fetchJSON(
-        `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${fhKey}`
+        `https://finnhub.io/api/v1/quote?symbol=${t}&token=${fhKey}`
       );
 
-      if (!data.c) return null;
+      const price = Number(data.c);
+      if (!price || price <= 0) return null;
 
       return {
-        price: Number(data.c),
+        price,
         change: ((data.c - data.pc) / data.pc) * 100 || 0,
         prev: Number(data.pc)
       };
@@ -67,6 +78,8 @@ export default async function handler(req, res) {
 
   for (const t of tickers) {
     let q = await fetchTwelve(t);
+
+    // fallback
     if (!q) q = await fetchFinnhub(t);
 
     if (q) prices[t] = q;
@@ -83,3 +96,4 @@ export default async function handler(req, res) {
 
   res.status(200).json(payload);
 }
+``
