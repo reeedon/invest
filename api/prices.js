@@ -1,5 +1,7 @@
-let cache = globalThis.__tdCache || { key: '', expiresAt: 0, payload: null };
-globalThis.__tdCache = cache;
+/* ── Per-symbol cache on globalThis (persists across warm invocations) ── */
+const CACHE_TTL = 5 * 60 * 1000;          // 5 minutes
+let symCache = globalThis.__tdSymCache || {};
+globalThis.__tdSymCache = symCache;
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -16,52 +18,90 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Provide symbols, e.g. ?symbols=VTI,NVDA' });
   }
 
-  /* ── Cache check (5 min) ── */
-  const cacheKey = tickers.join(',');
   const now = Date.now();
-  if (cache.payload && cache.key === cacheKey && cache.expiresAt > now) {
-    return res.status(200).json({ ...cache.payload, cached: true });
+  const prices  = {};
+  const errors  = {};
+  const toFetch = [];
+
+  /* ── 1. Serve from cache where possible ── */
+  for (const t of tickers) {
+    const c = symCache[t];
+    if (c && c.expiresAt > now) {
+      prices[t] = c.data;
+    } else {
+      toFetch.push(t);
+    }
   }
 
-  /* ── BATCH: single HTTP call for ALL symbols ── */
-  const symbolParam = tickers.join(',');
-  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbolParam)}&apikey=${apiKey}`;
-
-  try {
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) {
-      const txt = await response.text();
-      return res.status(502).json({ error: `Twelve Data HTTP ${response.status}: ${txt.slice(0, 300)}` });
+  /* ── 2. Fetch uncached symbols in batches of 2 (known to work) ── */
+  if (toFetch.length > 0) {
+    const BATCH = 2;
+    const chunks = [];
+    for (let i = 0; i < toFetch.length; i += BATCH) {
+      chunks.push(toFetch.slice(i, i + BATCH));
     }
-    const data = await response.json();
 
-    const prices = {};
-    const errors = {};
+    for (const chunk of chunks) {
+      try {
+        const symbolParam = chunk.join(',');
+        const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbolParam)}&apikey=${apiKey}`;
+        const resp = await fetch(url, { cache: 'no-store' });
 
-    if (tickers.length === 1) {
-      /* Single symbol → response IS the quote object directly */
-      const sym = tickers[0];
-      const parsed = parseQuote(data);
-      if (parsed) prices[sym] = parsed;
-      else errors[sym] = data.message || data.status || 'No price data';
-    } else {
-      /* Multiple symbols → response is { "VTI": {...}, "NVDA": {...}, ... } */
-      for (const sym of tickers) {
-        const d = data[sym];
-        if (!d) { errors[sym] = 'Not in response'; continue; }
-        const parsed = parseQuote(d);
-        if (parsed) prices[sym] = parsed;
-        else errors[sym] = d.message || d.status || 'No price data';
+        /* Rate-limited → stop hitting the API, remaining go to errors */
+        if (resp.status === 429) {
+          chunk.forEach(s => { errors[s] = 'Rate limited — hit ↻ Prices again in ~30s'; });
+          break;
+        }
+        if (!resp.ok) {
+          chunk.forEach(s => { errors[s] = `HTTP ${resp.status}`; });
+          continue;
+        }
+
+        const data = await resp.json();
+
+        if (chunk.length === 1) {
+          /* Single symbol → response IS the quote object */
+          const parsed = parseQuote(data);
+          if (parsed) {
+            prices[chunk[0]] = parsed;
+            symCache[chunk[0]] = { data: parsed, expiresAt: now + CACHE_TTL };
+          } else {
+            errors[chunk[0]] = data.message || data.status || 'No price data';
+          }
+        } else {
+          /* Multi-symbol → { "VTI": {...}, "NVDA": {...} } */
+          for (const sym of chunk) {
+            const d = data[sym];
+            if (!d) { errors[sym] = 'Not in API response'; continue; }
+            const parsed = parseQuote(d);
+            if (parsed) {
+              prices[sym] = parsed;
+              symCache[sym] = { data: parsed, expiresAt: now + CACHE_TTL };
+            } else {
+              errors[sym] = d.message || d.status || 'No price data';
+            }
+          }
+        }
+      } catch (err) {
+        chunk.forEach(s => { errors[s] = err.message; });
       }
     }
-
-    const payload = { prices, errors, cached: false, debug: { requested: tickers.length, loaded: Object.keys(prices).length, failed: Object.keys(errors) } };
-    cache = globalThis.__tdCache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, payload };
-    return res.status(200).json(payload);
-
-  } catch (err) {
-    return res.status(500).json({ error: `Fetch failed: ${err.message}` });
+    globalThis.__tdSymCache = symCache;
   }
+
+  const cachedCount = tickers.length - toFetch.length;
+  return res.status(200).json({
+    prices,
+    errors,
+    cached: toFetch.length === 0,
+    debug: {
+      requested: tickers.length,
+      loaded:    Object.keys(prices).length,
+      fromCache: cachedCount,
+      fetched:   toFetch.length,
+      failed:    Object.keys(errors)
+    }
+  });
 }
 
 function parseQuote(d) {
@@ -72,6 +112,6 @@ function parseQuote(d) {
   return {
     price,
     change: Number(d.percent_change ?? d.change_percent ?? 0),
-    prev: Number(d.previous_close ?? 0)
+    prev:   Number(d.previous_close ?? 0)
   };
 }
