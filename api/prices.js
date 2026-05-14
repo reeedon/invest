@@ -32,25 +32,37 @@ export default async function handler(req, res) {
   }
 
   // ✅ PRIMARY: Twelve Data
-  async function fetchTwelve(ticker) {
-    try {
-      const url = `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`;
-      const data = await fetchJSON(url);
+async function fetchTwelve(ticker) {
+  try {
+    // 1️⃣ Try quote first
+    let url = `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`;
+    let data = await fetchJSON(url);
 
-      if (data.status === "error") return null;
-
-      const price = Number(data.close);
-      if (!price || price <= 0) return null;
-
+    if (data.status !== "error" && data.close) {
       return {
-        price,
+        price: Number(data.close),
         change: Number(data.percent_change || 0),
         prev: Number(data.previous_close || 0)
       };
-    } catch {
-      return null;
     }
+
+    // 2️⃣ FALLBACK: use /price endpoint (works better for ETFs)
+    url = `https://api.twelvedata.com/price?symbol=${ticker}&apikey=${tdKey}`;
+    data = await fetchJSON(url);
+
+    const price = Number(data.price);
+    if (!price || price <= 0) return null;
+
+    return {
+      price,
+      change: 0,
+      prev: price
+    };
+
+  } catch {
+    return null;
   }
+}
 
   // ✅ FALLBACK: Finnhub
   async function fetchFinnhub(ticker) {
