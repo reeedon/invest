@@ -4,70 +4,94 @@ globalThis.__tdCache = cache;
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Missing TWELVE_DATA_API_KEY environment variable in Vercel.' });
+  const tdKey = process.env.TWELVE_DATA_API_KEY;
+  const fhKey = process.env.FINNHUB_API_KEY;
+
+  if (!tdKey) {
+    return res.status(500).json({ error: 'Missing TWELVE_DATA_API_KEY' });
   }
 
   const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
-  const tickers = [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))].slice(0, 50);
-  if (!tickers.length) {
-    return res.status(400).json({ error: 'Provide symbols query param, e.g. /api/prices?symbols=VTI,NVDA' });
-  }
+  const tickers = [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))];
 
   const cacheKey = tickers.join(',');
   const now = Date.now();
+
   if (cache.payload && cache.key === cacheKey && cache.expiresAt > now) {
     return res.status(200).json({ ...cache.payload, cached: true });
   }
 
-  async function fetchJson(url) {
-    const response = await fetch(url, { cache: 'no-store' });
-    const text = await response.text();
-    let data;
-    try { data = text ? JSON.parse(text) : null; }
-    catch { data = text; }
-    if (!response.ok) {
-      const snippet = typeof data === 'string' ? data.slice(0, 200) : JSON.stringify(data).slice(0, 200);
-      throw new Error(`HTTP ${response.status}: ${snippet}`);
-    }
-    return data;
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    const txt = await res.text();
+    return JSON.parse(txt);
   }
 
-  function normalize(data) {
-    if (!data || typeof data !== 'object') return null;
-    const price = Number(data.close ?? data.price ?? data.previous_close ?? 0);
-    if (!Number.isFinite(price) || price <= 0) return null;
-    const change = Number(data.percent_change ?? data.change_percent ?? 0);
-    const prev = Number(data.previous_close ?? 0);
-    return { price, change, prev };
+  // -------- Twelve Data primary --------
+  async function fetchTwelve(ticker) {
+    const url = `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`;
+    const data = await fetchJSON(url);
+
+    if (data.status === "error") return null;
+
+    const price = Number(data.close);
+    if (!price) return null;
+
+    return {
+      price,
+      change: Number(data.percent_change || 0),
+      prev: Number(data.previous_close || 0)
+    };
   }
 
-  async function fetchTicker(ticker) {
-    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`;
-    const data = await fetchJson(url);
-    if (data && data.status === 'error') {
-      throw new Error(data.message || 'Twelve Data returned an error');
+  // -------- Finnhub fallback --------
+  async function fetchFinnhub(ticker) {
+    if (!fhKey) return null;
+
+    try {
+      const url = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${fhKey}`;
+      const data = await fetchJSON(url);
+
+      const price = Number(data.c);
+      if (!price) return null;
+
+      return {
+        price,
+        change: ((data.c - data.pc) / data.pc) * 100 || 0,
+        prev: Number(data.pc)
+      };
+    } catch {
+      return null;
     }
-    const quote = normalize(data);
-    if (!quote) {
-      throw new Error('Unexpected Twelve Data response format');
-    }
-    return quote;
   }
 
   const prices = {};
   const errors = {};
-  const results = await Promise.allSettled(tickers.map(async (ticker) => ({ ticker, quote: await fetchTicker(ticker) })));
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      prices[result.value.ticker] = result.value.quote;
-    } else {
-      errors[tickers[i]] = result.reason?.message || 'Failed to load price';
-    }
-  });
 
-  const payload = { prices, errors, cached: false };
-  cache = globalThis.__tdCache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, payload };
-  return res.status(200).json(payload);
+  for (const ticker of tickers) {
+
+    // 1️⃣ Try Twelve Data first
+    let quote = await fetchTwelve(ticker);
+
+    // 2️⃣ If missing → fallback to Finnhub
+    if (!quote) {
+      quote = await fetchFinnhub(ticker);
+    }
+
+    if (quote) {
+      prices[ticker] = quote;
+    } else {
+      errors[ticker] = "Not found in both APIs";
+    }
+  }
+
+  const payload = { prices, errors };
+
+  cache = globalThis.__tdCache = {
+    key: cacheKey,
+    expiresAt: Date.now() + 5 * 60 * 1000,
+    payload
+  };
+
+  res.status(200).json(payload);
 }
