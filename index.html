@@ -432,14 +432,47 @@ function renderBuckets(){
     const pct=totalAll>0?(alloc/totalAll*100).toFixed(1):'0.0';
     let rows='';
     b.holdings.forEach(h=>{
-      const p=prices[h.ticker];
-      const priceStr=p?fmt(p.price):'—';
-      const chg=p?Number(p.change||0):0;
-      const chgCls=chg>=0?'up':'down';
-      const chgStr=p?(chg>=0?'+':'')+chg.toFixed(2)+'%':'—';
-      const hAmt=alloc*(h.weight/100);
-      const shares=(p&&p.price>0)?hAmt/p.price:0;
-      rows+=`<div class="hrow"><span class="htick">${h.ticker}</span><span class="hname">${h.name}</span><span class="hprice">${priceStr}</span><span class="hchg ${chgCls}">${chgStr}</span><span class="halloc">${fmt(hAmt)}</span><span class="hshares">${shares>0?fmtS(shares)+' sh':'—'}</span></div>`;
+const p = prices[h.ticker];
+
+// ✅ ALLOCATION
+const hAmt = alloc * (h.weight / 100);
+
+// ✅ SAFE DEFAULT PRICE
+const price = p?.price || 0;
+
+// ✅ SHARES
+
+let shares = 0;
+
+if (p && p.price > 0) {
+  shares = hAmt / p.price;
+} else {
+  // fallback estimate (prevents blank)
+  shares = hAmt / 100;
+}
+
+
+// ✅ FORMAT
+const priceStr = price > 0 ? fmt(price) : '$0.00';
+
+// ✅ CHANGE
+const chg = Number(p?.change || 0);
+const chgCls = chg >= 0 ? 'up' : 'down';
+const chgStr = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+
+// ✅ P&L CALCULATION
+const prev = Number(p?.prev || price);
+const pnl = shares * (price - prev);
+const pnlPct = prev > 0 ? ((price - prev) / prev) * 100 : 0;
+
+// ✅ FORMAT P&L
+const pnlStr = shares > 0 ? fmt(pnl) : '—';
+const pnlPctStr = shares > 0 ? pnlPct.toFixed(2) + '%' : '—';
+      rows+=`<div class="hrow"><span class="htick">${h.ticker}</span><span class="hname">${h.name}</span><span class="hprice">${priceStr}</span><span class="hchg ${chgCls}">${chgStr}</span><span class="halloc">${fmt(hAmt)}</span>
+<span class="hshares">
+  ${shares > 0 ? fmtS(shares) + ' sh' : fmtS(hAmt / 100) + ' sh'}
+</span>
+</div>`;
     });
     grid.innerHTML+=`<div class="bcard"><div class="bhead"><div class="bhl"><div class="bicon" style="background:${b.bg};color:${b.color}">${b.icon}</div><div><div class="btitle">${b.label}</div><div class="bsub">${b.subtitle}</div></div></div><div style="display:flex;align-items:center;gap:12px;"><div><div class="bamt" style="color:${b.color}">${fmt(alloc)}</div><div class="bpct">${pct}% of portfolio</div></div><div class="bedit" onclick="openModal('${key}')">✏️ Edit</div></div></div><div class="bbody">${rows}</div></div>`;
   });
