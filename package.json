@@ -1,0 +1,9 @@
+{
+  "name": "strategic-fund-allocator-vercel",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Strategic Fund Allocator with Vercel proxy for FMP pricing",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
