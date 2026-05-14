@@ -1,5 +1,6 @@
-let cache = globalThis.__tdCache || { key: '', expiresAt: 0, payload: null };
-globalThis.__tdCache = cache;
+// Simple in-memory cache (5 minutes)
+let cache = globalThis.__cache || { key: '', expiresAt: 0, payload: null };
+globalThis.__cache = cache;
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -11,40 +12,47 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing TWELVE_DATA_API_KEY' });
   }
 
-  const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
-  const tickers = [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))];
+  const raw = req.query.symbols || '';
+  const tickers = [...new Set(
+    raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+  )];
 
   const cacheKey = tickers.join(',');
   const now = Date.now();
 
+  // ✅ Return cached if valid
   if (cache.payload && cache.key === cacheKey && cache.expiresAt > now) {
     return res.status(200).json({ ...cache.payload, cached: true });
   }
 
   async function fetchJSON(url) {
-    const res = await fetch(url);
-    const txt = await res.text();
-    return JSON.parse(txt);
+    const r = await fetch(url);
+    const t = await r.text();
+    return JSON.parse(t);
   }
 
-  // -------- Twelve Data primary --------
+  // ✅ PRIMARY: Twelve Data
   async function fetchTwelve(ticker) {
-    const url = `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`;
-    const data = await fetchJSON(url);
+    try {
+      const url = `https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${tdKey}`;
+      const data = await fetchJSON(url);
 
-    if (data.status === "error") return null;
+      if (data.status === "error") return null;
 
-    const price = Number(data.close);
-    if (!price) return null;
+      const price = Number(data.close);
+      if (!price || price <= 0) return null;
 
-    return {
-      price,
-      change: Number(data.percent_change || 0),
-      prev: Number(data.previous_close || 0)
-    };
+      return {
+        price,
+        change: Number(data.percent_change || 0),
+        prev: Number(data.previous_close || 0)
+      };
+    } catch {
+      return null;
+    }
   }
 
-  // -------- Finnhub fallback --------
+  // ✅ FALLBACK: Finnhub
   async function fetchFinnhub(ticker) {
     if (!fhKey) return null;
 
@@ -53,7 +61,7 @@ export default async function handler(req, res) {
       const data = await fetchJSON(url);
 
       const price = Number(data.c);
-      if (!price) return null;
+      if (!price || price <= 0) return null;
 
       return {
         price,
@@ -69,11 +77,12 @@ export default async function handler(req, res) {
   const errors = {};
 
   for (const ticker of tickers) {
+    let quote = null;
 
-    // 1️⃣ Try Twelve Data first
-    let quote = await fetchTwelve(ticker);
+    // ✅ Try Twelve Data first
+    quote = await fetchTwelve(ticker);
 
-    // 2️⃣ If missing → fallback to Finnhub
+    // ✅ If missing → fallback to Finnhub
     if (!quote) {
       quote = await fetchFinnhub(ticker);
     }
@@ -81,13 +90,14 @@ export default async function handler(req, res) {
     if (quote) {
       prices[ticker] = quote;
     } else {
-      errors[ticker] = "Not found in both APIs";
+      errors[ticker] = 'Not found in both APIs';
     }
   }
 
-  const payload = { prices, errors };
+  const payload = { prices, errors, cached: false };
 
-  cache = globalThis.__tdCache = {
+  // ✅ Cache result (5 min)
+  cache = globalThis.__cache = {
     key: cacheKey,
     expiresAt: Date.now() + 5 * 60 * 1000,
     payload
@@ -95,3 +105,4 @@ export default async function handler(req, res) {
 
   res.status(200).json(payload);
 }
+``
