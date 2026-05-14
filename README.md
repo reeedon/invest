@@ -1,30 +1,40 @@
-# Strategic Fund Allocator — Vercel Proxy Version
+# Strategic Fund Allocator — Vercel + Twelve Data Version
 
-This package keeps the same UI design and fixes live pricing by routing quote requests through a Vercel Function instead of calling FMP directly from the browser.
+This package keeps the same UI design and switches live pricing from FMP to Twelve Data.
+
+## Why this version
+- Twelve Data's official free Basic plan includes 800 API credits/day.
+- The official quote endpoint costs 1 credit per symbol.
+- Auto-refresh is disabled to preserve free-tier credits.
+- The Vercel function caches responses for 5 minutes.
 
 ## Files
 - `index.html` — the app UI
-- `api/prices.js` — Vercel serverless function that fetches prices from FMP
+- `api/prices.js` — Vercel serverless function using Twelve Data
+
+## Environment Variable
+Set this in Vercel Project Settings → Environment Variables:
+- `TWELVE_DATA_API_KEY` = your Twelve Data API key
+
+Apply it to Production, Preview, and Development.
+Then redeploy.
 
 ## Deploy on Vercel
-1. Create a new folder on your computer and unzip this package into it.
-2. Go to Vercel and create/import a new project from this folder or a Git repo containing these files.
-3. In **Project Settings → Environment Variables**, add:
-   - `FMP_API_KEY` = your Financial Modeling Prep API key
-4. Apply that environment variable to **Production**, **Preview**, and **Development**.
-5. Redeploy after saving the variable.
+1. Unzip this package.
+2. Create/import a Vercel project from this folder or a Git repo containing these files.
+3. Add `TWELVE_DATA_API_KEY` in Vercel.
+4. Redeploy.
 
-## Local test with Vercel CLI
+## Local testing with Vercel CLI
 ```bash
 npm i -g vercel
 vercel login
 vercel link
 vercel dev
 ```
-Then open the local URL shown by Vercel.
 
-## How it works
-- The frontend requests `/api/prices?symbols=VTI,NVDA,...`
-- The Vercel function reads `process.env.FMP_API_KEY`
-- The function calls FMP server-to-server and returns normalized JSON
-- The browser only talks to your own Vercel domain, avoiding the direct browser→FMP problem
+## Notes
+- Frontend requests: `/api/prices?symbols=VTI,NVDA,...`
+- The Vercel function calls Twelve Data server-to-server.
+- Browser never calls Twelve Data directly.
+- Cache TTL: 5 minutes.

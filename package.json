@@ -1,8 +1,8 @@
 {
-  "name": "strategic-fund-allocator-vercel",
+  "name": "strategic-fund-allocator-vercel-twelvedata",
   "private": true,
   "version": "1.0.0",
-  "description": "Strategic Fund Allocator with Vercel proxy for FMP pricing",
+  "description": "Strategic Fund Allocator with Vercel proxy for Twelve Data pricing",
   "scripts": {
     "dev": "vercel dev"
   }

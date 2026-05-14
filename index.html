@@ -300,7 +300,7 @@ const DEFAULT_BUCKETS = {
 let buckets, weights, allocated, history, prices = {}, priceErrors = {};
 function loadState(){
   try{
-    const s=JSON.parse(localStorage.getItem('sfaVercelState1'));
+    const s=JSON.parse(localStorage.getItem('sfaTwelveVercelState1'));
     if(s){
       buckets=s.buckets||JSON.parse(JSON.stringify(DEFAULT_BUCKETS));
       weights=s.weights||{core:60,satellite:20,growth:15,cash:5};
@@ -316,7 +316,7 @@ function loadState(){
   history=[];
   prices={};
 }
-function saveState(){localStorage.setItem('sfaVercelState1',JSON.stringify({buckets,weights,allocated,history,prices}));}
+function saveState(){localStorage.setItem('sfaTwelveVercelState1',JSON.stringify({buckets,weights,allocated,history,prices}));}
 loadState();
 
 // ── UTILS ──
@@ -347,12 +347,13 @@ async function fetchAllPrices(){
     const loaded=Object.keys(prices).length;
     const failed=tickers.filter(t=>!prices[t]);
     let msg=`Last updated: <span class="up">${now}</span> · ${loaded}/${tickers.length} symbols loaded`;
+    if(data.cached) msg += ' · cached';
     if(failed.length) msg += ` · failed: ${failed.slice(0,5).join(', ')}${failed.length>5?'…':''}`;
     document.getElementById('statusBar').innerHTML=msg;
     renderAll();
   }catch(err){
     document.getElementById('statusBar').innerHTML='⚠️ Price fetch failed: '+err.message;
-    console.error('Price fetch failed:', err, priceErrors);
+    console.error('Price fetch failed:', err);
     renderAll();
   }
 }
@@ -397,7 +398,7 @@ function allocateFunds(){
 }
 function resetAll(){
   if(!confirm('Reset ALL allocations, history, and custom holdings?'))return;
-  localStorage.removeItem('sfaVercelState1');
+  localStorage.removeItem('sfaTwelveVercelState1');
   loadState(); loadSliders(); renderAll(); toast('Portfolio reset','ok');
 }
 
@@ -516,7 +517,7 @@ document.getElementById('cashInput').addEventListener('input',function(){ let v=
 loadSliders();
 renderAll();
 fetchAllPrices();
-setInterval(fetchAllPrices,60000);
+// Auto-refresh intentionally disabled to preserve free-tier credits.
 </script>
 </body>
 </html>

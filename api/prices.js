@@ -1,15 +1,24 @@
+let cache = globalThis.__tdCache || { key: '', expiresAt: 0, payload: null };
+globalThis.__tdCache = cache;
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Missing FMP_API_KEY environment variable in Vercel.' });
+    return res.status(500).json({ error: 'Missing TWELVE_DATA_API_KEY environment variable in Vercel.' });
   }
 
   const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
   const tickers = [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))].slice(0, 50);
   if (!tickers.length) {
     return res.status(400).json({ error: 'Provide symbols query param, e.g. /api/prices?symbols=VTI,NVDA' });
+  }
+
+  const cacheKey = tickers.join(',');
+  const now = Date.now();
+  if (cache.payload && cache.key === cacheKey && cache.expiresAt > now) {
+    return res.status(200).json({ ...cache.payload, cached: true });
   }
 
   async function fetchJson(url) {
@@ -25,58 +34,40 @@ export default async function handler(req, res) {
     return data;
   }
 
-  function normalize(q) {
-    if (!q) return null;
-    const price = Number(q.price ?? q.last ?? q.close);
+  function normalize(data) {
+    if (!data || typeof data !== 'object') return null;
+    const price = Number(data.close ?? data.price ?? data.previous_close ?? 0);
     if (!Number.isFinite(price) || price <= 0) return null;
-    return {
-      price,
-      change: Number(q.changesPercentage ?? q.changePercentage ?? q.change ?? 0),
-      prev: Number(q.previousClose ?? q.previous_close ?? 0)
-    };
+    const change = Number(data.percent_change ?? data.change_percent ?? 0);
+    const prev = Number(data.previous_close ?? 0);
+    return { price, change, prev };
   }
 
   async function fetchTicker(ticker) {
-    const attempts = [
-      `https://financialmodelingprep.com/stable/quote?symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`,
-      `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(ticker)}?apikey=${apiKey}`,
-      `https://financialmodelingprep.com/api/v3/quote-short/${encodeURIComponent(ticker)}?apikey=${apiKey}`
-    ];
-
-    let lastError = 'Unknown error';
-    for (const url of attempts) {
-      try {
-        const data = await fetchJson(url);
-        if (Array.isArray(data) && data.length > 0) {
-          const quote = normalize(data[0]);
-          if (quote) return quote;
-        }
-        lastError = 'Unexpected response format';
-      } catch (err) {
-        lastError = err.message;
-      }
+    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`;
+    const data = await fetchJson(url);
+    if (data && data.status === 'error') {
+      throw new Error(data.message || 'Twelve Data returned an error');
     }
-    throw new Error(lastError);
+    const quote = normalize(data);
+    if (!quote) {
+      throw new Error('Unexpected Twelve Data response format');
+    }
+    return quote;
   }
 
   const prices = {};
   const errors = {};
-
   const results = await Promise.allSettled(tickers.map(async (ticker) => ({ ticker, quote: await fetchTicker(ticker) })));
-  for (const result of results) {
+  results.forEach((result, i) => {
     if (result.status === 'fulfilled') {
       prices[result.value.ticker] = result.value.quote;
     } else {
-      // We don't have ticker on reject payload, so map from original index below if needed.
-    }
-  }
-
-  // Fill errors by retrying index mapping
-  results.forEach((result, i) => {
-    if (result.status === 'rejected') {
       errors[tickers[i]] = result.reason?.message || 'Failed to load price';
     }
   });
 
-  return res.status(200).json({ prices, errors });
+  const payload = { prices, errors, cached: false };
+  cache = globalThis.__tdCache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, payload };
+  return res.status(200).json(payload);
 }
