@@ -3,84 +3,75 @@ globalThis.__tdCache = cache;
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Missing TWELVE_DATA_API_KEY environment variable in Vercel.' });
+    return res.status(500).json({ error: 'TWELVE_DATA_API_KEY not set in Vercel env vars.' });
   }
 
   const raw = typeof req.query.symbols === 'string' ? req.query.symbols : '';
   const tickers = [...new Set(raw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean))].slice(0, 50);
   if (!tickers.length) {
-    return res.status(400).json({ error: 'Provide symbols query param, e.g. /api/prices?symbols=VTI,NVDA' });
+    return res.status(400).json({ error: 'Provide symbols, e.g. ?symbols=VTI,NVDA' });
   }
 
+  /* ── Cache check (5 min) ── */
   const cacheKey = tickers.join(',');
   const now = Date.now();
   if (cache.payload && cache.key === cacheKey && cache.expiresAt > now) {
     return res.status(200).json({ ...cache.payload, cached: true });
   }
 
-  const prices = {};
-  const errors = {};
+  /* ── BATCH: single HTTP call for ALL symbols ── */
+  const symbolParam = tickers.join(',');
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbolParam)}&apikey=${apiKey}`;
 
-  // ── BATCH REQUEST: single HTTP call for all tickers ──
   try {
-    const url = `https://api.twelvedata.com/quote?symbol=${tickers.join(',')}&apikey=${apiKey}`;
     const response = await fetch(url, { cache: 'no-store' });
-    const text = await response.text();
-
-    let data;
-    try { data = text ? JSON.parse(text) : null; } catch {
-      throw new Error('Invalid JSON: ' + (text || '').slice(0, 200));
-    }
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${JSON.stringify(data).slice(0, 200)}`);
+      const txt = await response.text();
+      return res.status(502).json({ error: `Twelve Data HTTP ${response.status}: ${txt.slice(0, 300)}` });
     }
+    const data = await response.json();
 
-    // Single symbol → response is the quote object directly
-    // Multiple symbols → response is { TICKER: {...}, TICKER2: {...} }
+    const prices = {};
+    const errors = {};
+
     if (tickers.length === 1) {
-      const quote = normalize(data);
-      if (quote) {
-        prices[tickers[0]] = quote;
-      } else {
-        errors[tickers[0]] = data?.message || 'Unexpected response format';
-      }
+      /* Single symbol → response IS the quote object directly */
+      const sym = tickers[0];
+      const parsed = parseQuote(data);
+      if (parsed) prices[sym] = parsed;
+      else errors[sym] = data.message || data.status || 'No price data';
     } else {
-      for (const ticker of tickers) {
-        const entry = data[ticker];
-        if (!entry) {
-          errors[ticker] = 'No data returned';
-          continue;
-        }
-        if (entry.status === 'error') {
-          errors[ticker] = entry.message || 'API error';
-          continue;
-        }
-        const quote = normalize(entry);
-        if (quote) {
-          prices[ticker] = quote;
-        } else {
-          errors[ticker] = 'Could not parse quote';
-        }
+      /* Multiple symbols → response is { "VTI": {...}, "NVDA": {...}, ... } */
+      for (const sym of tickers) {
+        const d = data[sym];
+        if (!d) { errors[sym] = 'Not in response'; continue; }
+        const parsed = parseQuote(d);
+        if (parsed) prices[sym] = parsed;
+        else errors[sym] = d.message || d.status || 'No price data';
       }
     }
-  } catch (err) {
-    // If batch fails entirely, return the error
-    return res.status(200).json({ prices, errors: { _batch: err.message }, cached: false });
-  }
 
-  const payload = { prices, errors, cached: false };
-  cache = globalThis.__tdCache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, payload };
-  return res.status(200).json(payload);
+    const payload = { prices, errors, cached: false, debug: { requested: tickers.length, loaded: Object.keys(prices).length, failed: Object.keys(errors) } };
+    cache = globalThis.__tdCache = { key: cacheKey, expiresAt: Date.now() + 5 * 60 * 1000, payload };
+    return res.status(200).json(payload);
+
+  } catch (err) {
+    return res.status(500).json({ error: `Fetch failed: ${err.message}` });
+  }
 }
 
-function normalize(data) {
-  if (!data || typeof data !== 'object') return null;
-  if (data.status === 'error') return null;
-  const price = Number(data.close ?? data.price ?? data.previous_close ?? 0);
+function parseQuote(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (d.status === 'error') return null;
+  const price = Number(d.close ?? d.price ?? d.previous_close ?? 0);
   if (!Number.isFinite(price) || price <= 0) return null;
-  const change = Number(data.percent_change ?? data.change_percent ?? 0);
-  const prev = Number(data.previous_close ?? 0);
-  return { price, change, prev };
+  return {
+    price,
+    change: Number(d.percent_change ?? d.change_percent ?? 0),
+    prev: Number(d.previous_close ?? 0)
+  };
 }
