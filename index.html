@@ -5,519 +5,781 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Strategic Fund Allocator</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-  :root {
-    --bg0:#070b14; --bg1:#0f1629; --bg2:#182040; --bg3:#1e2a4a;
-    --border:#273354; --border-light:#344170;
-    --t1:#f0f4ff; --t2:#94a3c8; --t3:#5c6b8a;
-    --blue:#3b82f6; --blue-g:rgba(59,130,246,0.18);
-    --green:#10b981; --green-g:rgba(16,185,129,0.14);
-    --purple:#a78bfa; --purple-g:rgba(167,139,250,0.14);
-    --orange:#f59e0b; --orange-g:rgba(245,158,11,0.14);
-    --cyan:#22d3ee; --cyan-g:rgba(34,211,238,0.14);
-    --red:#ef4444; --red-g:rgba(239,68,68,0.14);
-    --radius:14px;
-  }
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--t1);min-height:100vh;}
-  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 25% 0%,rgba(59,130,246,0.07),transparent 60%),radial-gradient(ellipse at 75% 100%,rgba(167,139,250,0.05),transparent 60%);pointer-events:none;z-index:0;}
-  .app{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:20px 20px 60px;}
-
-  /* ── HEADER ── */
-  .hdr{text-align:center;padding:28px 0 20px;}
-  .hdr h1{font-size:2.1rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-  .hdr p{color:var(--t2);font-size:.92rem;margin-top:4px;}
-  .live-badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:4px 14px;border-radius:20px;background:var(--green-g);border:1px solid rgba(16,185,129,.3);font-size:.75rem;color:var(--green);font-weight:600;}
-  .dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 1.4s infinite;}
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
-
-  /* ── CARD BASE ── */
-  .card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;}
-
-  /* ── INPUT ROW ── */
-  .input-row{display:flex;align-items:flex-end;gap:12px;padding:24px 28px;flex-wrap:wrap;}
-  .fg{display:flex;flex-direction:column;gap:6px;}
-  .fg.grow{flex:1;min-width:200px;}
-  .fg label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);}
-  .fin{width:100%;padding:12px 16px;font-size:1.2rem;font-weight:700;font-family:'Inter',sans-serif;background:var(--bg0);border:2px solid var(--border);border-radius:10px;color:var(--t1);outline:none;transition:.2s;}
-  .fin:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-g);}
-  .fin::placeholder{color:var(--t3);font-weight:400;}
-  .fin.sm{font-size:.92rem;font-weight:500;}
-
-  /* ── BUTTONS ── */
-  .btn{padding:12px 24px;font-size:.88rem;font-weight:700;font-family:'Inter',sans-serif;border:none;border-radius:10px;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
-  .btn:active{transform:scale(.97);}
-  .btn-p{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.3);}
-  .btn-p:hover{box-shadow:0 6px 20px rgba(59,130,246,.4);}
-  .btn-g{background:var(--green-g);color:var(--green);border:1px solid rgba(16,185,129,.3);}
-  .btn-g:hover{background:rgba(16,185,129,.25);}
-  .btn-s{background:var(--bg0);color:var(--t2);border:1px solid var(--border);}
-  .btn-s:hover{background:var(--bg2);color:var(--t1);}
-  .btn-d{background:var(--red-g);color:var(--red);border:1px solid rgba(239,68,68,.3);}
-  .btn-d:hover{background:rgba(239,68,68,.25);}
-  .btn-sm{padding:7px 14px;font-size:.78rem;border-radius:8px;}
-
-  /* ── SUMMARY BAR ── */
-  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
-  .scard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;text-align:center;}
-  .scard .sl{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-bottom:4px;}
-  .scard .sv{font-size:1.4rem;font-weight:800;}
-
-  /* ── ALLOC BAR ── */
-  .abar{height:10px;border-radius:5px;background:var(--bg2);overflow:hidden;display:flex;margin-bottom:20px;}
-  .abar .seg{height:100%;transition:width .4s;}
-
-  /* ── SLIDERS ── */
-  .slider-wrap{padding:20px 28px;}
-  .slider-wrap h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t2);margin-bottom:14px;}
-  .srow{display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:9px 14px;border-radius:10px;background:var(--bg0);}
-  .srow .sdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-  .srow .sname{font-size:.85rem;font-weight:600;min-width:110px;}
-  .srow input[type=range]{flex:1;-webkit-appearance:none;height:5px;border-radius:3px;background:var(--border);outline:none;}
-  .srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--blue);cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,.4);}
-  .srow .spct{font-size:.95rem;font-weight:800;min-width:44px;text-align:right;}
-  .swarn{text-align:center;font-size:.8rem;color:var(--red);font-weight:600;margin-top:6px;min-height:18px;}
-
-  /* ── BUCKET CARDS ── */
-  .bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:20px;}
-  .bcard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.2s;}
-  .bcard:hover{border-color:var(--border-light);box-shadow:0 6px 24px rgba(0,0,0,.25);}
-  .bhead{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
-  .bhead .bhl{display:flex;align-items:center;gap:10px;}
-  .bhead .bicon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;}
-  .bhead .btitle{font-size:.95rem;font-weight:700;}
-  .bhead .bsub{font-size:.7rem;color:var(--t3);font-weight:500;}
-  .bhead .bamt{font-size:1.15rem;font-weight:800;text-align:right;}
-  .bhead .bpct{font-size:.7rem;color:var(--t3);text-align:right;}
-  .bhead .bedit{cursor:pointer;padding:5px 10px;border-radius:7px;font-size:.72rem;font-weight:600;background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.2);transition:.2s;}
-  .bhead .bedit:hover{background:rgba(59,130,246,.2);}
-  .bbody{padding:4px 0;}
-  .hrow{display:grid;grid-template-columns:56px 1fr 72px 72px 80px 72px;align-items:center;padding:9px 20px;transition:background .12s;gap:4px;}
-  .hrow:hover{background:var(--bg2);}
-  .htick{font-weight:700;font-size:.85rem;}
-  .hname{font-size:.76rem;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .hprice{font-size:.82rem;font-weight:600;text-align:right;}
-  .hchg{font-size:.73rem;font-weight:700;text-align:center;padding:2px 6px;border-radius:6px;justify-self:center;}
-  .hchg.up{color:var(--green);background:var(--green-g);}
-  .hchg.down{color:var(--red);background:var(--red-g);}
-  .halloc{font-size:.82rem;font-weight:700;text-align:right;}
-  .hshares{font-size:.72rem;color:var(--t3);text-align:right;}
-
-  /* ── HISTORY ── */
-  .hist{padding:20px 28px;}
-  .hist h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t2);margin-bottom:12px;}
-  .htable{width:100%;border-collapse:collapse;}
-  .htable th{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
-  .htable td{font-size:.82rem;padding:9px 10px;border-bottom:1px solid rgba(39,51,84,.4);color:var(--t2);}
-  .htable td:nth-child(2){font-weight:700;color:var(--green);}
-  .hempty{text-align:center;color:var(--t3);font-size:.85rem;padding:28px 0;}
-
-  /* ── STATUS ── */
-  .status{text-align:center;font-size:.76rem;color:var(--t3);padding:8px 0;}
-  .status .up{color:var(--green);font-weight:600;}
-
-  /* ── SPINNER ── */
-  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:sp .6s linear infinite;}
-  @keyframes sp{to{transform:rotate(360deg)}}
-
-  /* ── TOAST ── */
-  .toast{position:fixed;bottom:28px;right:28px;padding:13px 22px;border-radius:12px;font-size:.85rem;font-weight:600;color:#fff;z-index:1000;transform:translateY(90px);opacity:0;transition:.3s;}
-  .toast.show{transform:translateY(0);opacity:1;}
-  .toast.ok{background:linear-gradient(135deg,#059669,#10b981);}
-  .toast.err{background:linear-gradient(135deg,#dc2626,#ef4444);}
-
-  /* ── MODAL ── */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);z-index:900;display:none;align-items:center;justify-content:center;}
-  .modal-overlay.open{display:flex;}
-  .modal{background:var(--bg1);border:1px solid var(--border);border-radius:18px;width:95%;max-width:640px;max-height:85vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
-  .modal h2{font-size:1.15rem;font-weight:800;margin-bottom:4px;}
-  .modal .msub{font-size:.82rem;color:var(--t2);margin-bottom:20px;}
-  .mhold{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;background:var(--bg0);}
-  .mhold .mtick{font-weight:800;font-size:.95rem;min-width:55px;}
-  .mhold .mname{flex:1;font-size:.82rem;color:var(--t2);}
-  .mhold .mwt{width:60px;text-align:center;font-weight:700;font-size:.85rem;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;color:var(--t1);font-family:'Inter',sans-serif;outline:none;}
-  .mhold .mwt:focus{border-color:var(--blue);}
-  .mhold .mdel{cursor:pointer;padding:5px 10px;border-radius:7px;font-size:.78rem;font-weight:600;background:var(--red-g);color:var(--red);border:1px solid rgba(239,68,68,.2);transition:.15s;}
-  .mhold .mdel:hover{background:rgba(239,68,68,.25);}
-  .madd-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
-  .madd-row input{padding:9px 12px;font-size:.85rem;font-family:'Inter',sans-serif;background:var(--bg0);border:1px solid var(--border);border-radius:8px;color:var(--t1);outline:none;}
-  .madd-row input:focus{border-color:var(--blue);}
-  .madd-row .mi-tick{width:80px;font-weight:700;text-transform:uppercase;}
-  .madd-row .mi-name{flex:1;min-width:140px;}
-  .madd-row .mi-wt{width:65px;text-align:center;}
-  .mfooter{display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
-  .mfooter .mwarn{font-size:.8rem;color:var(--red);font-weight:600;}
-  .mfooter .mbtns{display:flex;gap:8px;}
-
-  /* ── RESPONSIVE ── */
-  @media(max-width:768px){
-    .app{padding:12px 10px 40px;}
-    .hdr h1{font-size:1.5rem;}
-    .input-row{padding:18px 16px;flex-direction:column;}
-    .fg.grow{min-width:unset;}
-    .btn{width:100%;justify-content:center;}
-    .bgrid{grid-template-columns:1fr;}
-    .hrow{grid-template-columns:50px 1fr 64px 62px 68px;gap:2px;}
-    .hname{display:none;}
-    .summary{grid-template-columns:repeat(2,1fr);}
-    .modal{padding:20px 16px;width:98%;}
-  }
+ @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+ :root {
+ --bg0:#070b14; --bg1:#0f1629; --bg2:#182040; --bg3:#1e2a4a;
+ --border:#273354; --border-light:#344170;
+ --t1:#f0f4ff; --t2:#94a3c8; --t3:#5c6b8a;
+ --blue:#3b82f6; --blue-g:rgba(59,130,246,0.18);
+ --green:#10b981; --green-g:rgba(16,185,129,0.14);
+ --purple:#a78bfa; --purple-g:rgba(167,139,250,0.14);
+ --orange:#f59e0b; --orange-g:rgba(245,158,11,0.14);
+ --cyan:#22d3ee; --cyan-g:rgba(34,211,238,0.14);
+ --red:#ef4444; --red-g:rgba(239,68,68,0.14);
+ --radius:14px;
+ }
+ *{margin:0;padding:0;box-sizing:border-box;}
+ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--t1);min-height:100vh;}
+ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 25% 0%,rgba(59,130,246,0.07),transparent 60%),radial-gradient(ellipse at 75% 100%,rgba(167,139,250,0.05),transparent 60%);pointer-events:none;z-index:0;}
+ .app{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:20px 20px 60px;}
+ .hdr{text-align:center;padding:28px 0 20px;}
+ .hdr h1{font-size:2.1rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+ .hdr p{color:var(--t2);font-size:.92rem;margin-top:4px;}
+ .live-badge{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:4px 14px;border-radius:20px;background:var(--green-g);border:1px solid rgba(16,185,129,.3);font-size:.75rem;color:var(--green);font-weight:600;}
+ .dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 1.4s infinite;}
+ @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+ .card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;}
+ .input-row{display:flex;align-items:flex-end;gap:12px;padding:24px 28px;flex-wrap:wrap;}
+ .fg{display:flex;flex-direction:column;gap:6px;}
+ .fg.grow{flex:1;min-width:200px;}
+ .fg label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);}
+ .fin{width:100%;padding:12px 16px;font-size:1.2rem;font-weight:700;font-family:'Inter',sans-serif;background:var(--bg0);border:2px solid var(--border);border-radius:10px;color:var(--t1);outline:none;transition:.2s;}
+ .fin:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-g);}
+ .fin::placeholder{color:var(--t3);font-weight:400;}
+ .fin.sm{font-size:.92rem;font-weight:500;}
+ .btn{padding:12px 24px;font-size:.88rem;font-weight:700;font-family:'Inter',sans-serif;border:none;border-radius:10px;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+ .btn:active{transform:scale(.97);}
+ .btn-p{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.3);}
+ .btn-p:hover{box-shadow:0 6px 20px rgba(59,130,246,.4);}
+ .btn-g{background:var(--green-g);color:var(--green);border:1px solid rgba(16,185,129,.3);}
+ .btn-g:hover{background:rgba(16,185,129,.25);}
+ .btn-s{background:var(--bg0);color:var(--t2);border:1px solid var(--border);}
+ .btn-s:hover{background:var(--bg2);color:var(--t1);}
+ .btn-sm{padding:7px 14px;font-size:.78rem;border-radius:8px;}
+ .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px;}
+ .scard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;text-align:center;}
+ .scard .sl{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-bottom:4px;}
+ .scard .sv{font-size:1.35rem;font-weight:800;}
+ .scard .sv-sub{font-size:.76rem;font-weight:700;margin-top:2px;}
+ .abar{height:10px;border-radius:5px;background:var(--bg2);overflow:hidden;display:flex;margin-bottom:20px;}
+ .abar .seg{height:100%;transition:width .4s;}
+ .chart-wrap{padding:20px 28px;}
+ .chart-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+ .chart-hdr h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t2);}
+ .chart-legend{display:flex;gap:16px;}
+ .cl-item{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--t3);}
+ .cl-line{width:20px;height:3px;border-radius:2px;}
+ .cl-val{background:var(--green);}
+ .cl-cost{background:var(--t3);height:2px;}
+ #valueChart{width:100%;height:200px;display:block;}
+ .slider-wrap{padding:20px 28px;}
+ .slider-wrap h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t2);margin-bottom:14px;}
+ .srow{display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:9px 14px;border-radius:10px;background:var(--bg0);}
+ .srow .sdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+ .srow .sname{font-size:.85rem;font-weight:600;min-width:110px;}
+ .srow input[type=range]{flex:1;-webkit-appearance:none;height:5px;border-radius:3px;background:var(--border);outline:none;}
+ .srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--blue);cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,.4);}
+ .srow .spct{font-size:.95rem;font-weight:800;min-width:44px;text-align:right;}
+ .swarn{text-align:center;font-size:.8rem;color:var(--red);font-weight:600;margin-top:6px;min-height:18px;}
+ .bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;margin-bottom:20px;}
+ .bcard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.2s;}
+ .bcard:hover{border-color:var(--border-light);box-shadow:0 6px 24px rgba(0,0,0,.25);}
+ .bhead{padding:16px 20px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+ .bhead .bhl{display:flex;align-items:center;gap:10px;}
+ .bhead .bicon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;}
+ .bhead .btitle{font-size:.92rem;font-weight:700;}
+ .bhead .bsub{font-size:.68rem;color:var(--t3);font-weight:500;}
+ .bhead .bamt{font-size:1.1rem;font-weight:800;text-align:right;}
+ .bhead .bpct{font-size:.68rem;text-align:right;margin-top:1px;}
+ .bhead .bedit{cursor:pointer;padding:5px 10px;border-radius:7px;font-size:.72rem;font-weight:600;background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.2);transition:.2s;}
+ .bhead .bedit:hover{background:rgba(59,130,246,.2);}
+ .bbody{padding:0;}
+ .hrow{display:grid;grid-template-columns:48px 1fr 66px 56px 74px 96px;align-items:center;padding:8px 16px;transition:background .12s;gap:2px;}
+ .hrow:hover{background:var(--bg2);}
+ .hrow-header{padding:6px 16px;border-bottom:1px solid rgba(39,51,84,.25);}
+ .hrow-header:hover{background:transparent;}
+ .hrow-header span{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);}
+ .htick{font-weight:700;font-size:.82rem;}
+ .hname{font-size:.72rem;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+ .hprice{font-size:.8rem;font-weight:600;text-align:right;}
+ .hchg{font-size:.7rem;font-weight:700;text-align:center;padding:2px 5px;border-radius:5px;justify-self:center;}
+ .hchg.up{color:var(--green);background:var(--green-g);}
+ .hchg.down{color:var(--red);background:var(--red-g);}
+ .hshares{font-size:.78rem;font-weight:600;text-align:right;line-height:1.4;}
+ .havg-sub{display:block;font-size:.6rem;color:var(--t3);font-weight:400;}
+ .hvalpl{font-size:.8rem;font-weight:700;text-align:right;line-height:1.4;}
+ .hpl-line{display:block;font-size:.64rem;font-weight:600;}
+ .hpl-line.up{color:var(--green);}
+ .hpl-line.down{color:var(--red);}
+ .bfoot{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;font-size:.72rem;color:var(--t2);font-weight:500;}
+ .bfoot span{white-space:nowrap;}
+ .hist{padding:20px 28px;}
+ .hist h3{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t2);margin-bottom:12px;}
+ .htable{width:100%;border-collapse:collapse;}
+ .htable th{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+ .htable td{font-size:.82rem;padding:9px 10px;border-bottom:1px solid rgba(39,51,84,.4);color:var(--t2);}
+ .htable td:nth-child(2){font-weight:700;color:var(--green);}
+ .hempty{text-align:center;color:var(--t3);font-size:.85rem;padding:28px 0;}
+ .status{text-align:center;font-size:.76rem;color:var(--t3);padding:8px 0;}
+ .status .up{color:var(--green);font-weight:600;}
+ .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:sp .6s linear infinite;}
+ @keyframes sp{to{transform:rotate(360deg)}}
+ .toast{position:fixed;bottom:28px;right:28px;padding:13px 22px;border-radius:12px;font-size:.85rem;font-weight:600;color:#fff;z-index:1000;transform:translateY(90px);opacity:0;transition:.3s;}
+ .toast.show{transform:translateY(0);opacity:1;}
+ .toast.ok{background:linear-gradient(135deg,#059669,#10b981);}
+ .toast.err{background:linear-gradient(135deg,#dc2626,#ef4444);}
+ .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);z-index:900;display:none;align-items:center;justify-content:center;}
+ .modal-overlay.open{display:flex;}
+ .modal{background:var(--bg1);border:1px solid var(--border);border-radius:18px;width:95%;max-width:640px;max-height:85vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+ .modal h2{font-size:1.15rem;font-weight:800;margin-bottom:4px;}
+ .modal .msub{font-size:.82rem;color:var(--t2);margin-bottom:20px;}
+ .mhold{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;background:var(--bg0);}
+ .mhold .mtick{font-weight:800;font-size:.95rem;min-width:55px;}
+ .mhold .mname{flex:1;font-size:.82rem;color:var(--t2);}
+ .mhold .mwt{width:60px;text-align:center;font-weight:700;font-size:.85rem;padding:6px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;color:var(--t1);font-family:'Inter',sans-serif;outline:none;}
+ .mhold .mwt:focus{border-color:var(--blue);}
+ .mhold .mdel{cursor:pointer;padding:5px 10px;border-radius:7px;font-size:.78rem;font-weight:600;background:var(--red-g);color:var(--red);border:1px solid rgba(239,68,68,.2);transition:.15s;}
+ .mhold .mdel:hover{background:rgba(239,68,68,.25);}
+ .madd-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+ .madd-row input{padding:9px 12px;font-size:.85rem;font-family:'Inter',sans-serif;background:var(--bg0);border:1px solid var(--border);border-radius:8px;color:var(--t1);outline:none;}
+ .madd-row input:focus{border-color:var(--blue);}
+ .madd-row .mi-tick{width:80px;font-weight:700;text-transform:uppercase;}
+ .madd-row .mi-name{flex:1;min-width:140px;}
+ .madd-row .mi-wt{width:65px;text-align:center;}
+ .mfooter{display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+ .mfooter .mwarn{font-size:.8rem;color:var(--red);font-weight:600;}
+ .mfooter .mbtns{display:flex;gap:8px;}
+ @media(max-width:768px){
+ .app{padding:12px 10px 40px;}
+ .hdr h1{font-size:1.5rem;}
+ .input-row{padding:18px 16px;flex-direction:column;}
+ .fg.grow{min-width:unset;}
+ .btn{width:100%;justify-content:center;}
+ .bgrid{grid-template-columns:1fr;}
+ .hrow{grid-template-columns:44px 56px 48px 58px 82px;padding:7px 10px;gap:2px;}
+ .hrow-header{padding:5px 10px;}
+ .hname{display:none;}
+ .summary{grid-template-columns:repeat(2,1fr);}
+ .modal{padding:20px 16px;width:98%;}
+ }
 </style>
 </head>
 <body>
 <div class="app">
-
-  <!-- HEADER -->
-  <div class="hdr">
-    <h1>⚡ Strategic Fund Allocator</h1>
-    <p>Intelligent multi-bucket allocation with live market data</p>
-    <div class="live-badge"><span class="dot"></span> Live Prices · Auto-Refresh 60s</div>
+ <div class="hdr">
+ <h1>⚡ Strategic Fund Allocator</h1>
+ <p>Intelligent multi-bucket allocation with live market data</p>
+ <div class="live-badge"><span class="dot"></span> Live Prices · Auto-Refresh</div>
+ </div>
+ <div class="card">
+ <div class="input-row">
+  <div class="fg grow">
+  <label>💰 Cash to Allocate</label>
+  <input class="fin" type="text" id="cashInput" placeholder="10,000" inputmode="decimal" autofocus>
   </div>
-
-  <!-- INPUT -->
-  <div class="card">
-    <div class="input-row">
-      <div class="fg grow">
-        <label>💰 Cash to Allocate</label>
-        <input class="fin" type="text" id="cashInput" placeholder="10,000" inputmode="decimal" autofocus>
-      </div>
-      <div class="fg" style="min-width:150px;">
-        <label>📝 Note</label>
-        <input class="fin sm" type="text" id="noteInput" placeholder="RSU, bonus...">
-      </div>
-      <button class="btn btn-p" onclick="allocateFunds()">🚀 Allocate</button>
-      <button class="btn btn-g" onclick="fetchAllPrices()">↻ Prices</button>
-      <button class="btn btn-s" onclick="resetAll()">🗑️ Reset</button>
-    </div>
+  <div class="fg" style="min-width:150px;">
+  <label>📝 Note</label>
+  <input class="fin sm" type="text" id="noteInput" placeholder="RSU, bonus...">
   </div>
-
-  <!-- ALLOC BAR -->
-  <div class="abar" id="allocBar"></div>
-
-  <!-- SUMMARY -->
-  <div class="summary" id="summaryBar">
-    <div class="scard"><div class="sl">Total Invested</div><div class="sv" style="color:var(--green)" id="stTotal">$0.00</div></div>
-    <div class="scard"><div class="sl">🛡️ Core</div><div class="sv" style="color:var(--blue)" id="stCore">$0.00</div></div>
-    <div class="scard"><div class="sl">🎯 Satellite</div><div class="sv" style="color:var(--purple)" id="stSat">$0.00</div></div>
-    <div class="scard"><div class="sl">🚀 Growth</div><div class="sv" style="color:var(--orange)" id="stGrowth">$0.00</div></div>
-    <div class="scard"><div class="sl">💵 Cash</div><div class="sv" style="color:var(--cyan)" id="stCash">$0.00</div></div>
+  <button class="btn btn-p" onclick="allocateFunds()">🚀 Allocate</button>
+  <button class="btn btn-g" onclick="fetchAllPrices()">↻ Prices</button>
+  <button class="btn btn-s" onclick="resetAll()">🗑️ Reset</button>
+ </div>
+ </div>
+ <div class="abar" id="allocBar"></div>
+ <div class="summary">
+ <div class="scard"><div class="sl">💰 Cost Basis</div><div class="sv" style="color:var(--t1)" id="stTotal">$0.00</div></div>
+ <div class="scard"><div class="sl">📈 Market Value</div><div class="sv" style="color:var(--blue)" id="stMktVal">$0.00</div></div>
+ <div class="scard"><div class="sl">💹 Total P&L</div><div class="sv" id="stPL">$0.00</div><div class="sv-sub" id="stPLpct"></div></div>
+ <div class="scard"><div class="sl">🛡️ Core</div><div class="sv" style="color:var(--blue)" id="stCore">$0.00</div><div class="sv-sub" id="stCorePL"></div></div>
+ <div class="scard"><div class="sl">🎯 Satellite</div><div class="sv" style="color:var(--purple)" id="stSat">$0.00</div><div class="sv-sub" id="stSatPL"></div></div>
+ <div class="scard"><div class="sl">🚀 Growth</div><div class="sv" style="color:var(--orange)" id="stGrowth">$0.00</div><div class="sv-sub" id="stGrowthPL"></div></div>
+ <div class="scard"><div class="sl">💵 Cash</div><div class="sv" style="color:var(--cyan)" id="stCash">$0.00</div><div class="sv-sub" id="stCashPL"></div></div>
+ </div>
+ <div class="card" id="chartCard" style="display:none;">
+ <div class="chart-wrap">
+  <div class="chart-hdr">
+  <h3>📈 Portfolio Value Over Time</h3>
+  <div class="chart-legend">
+   <span class="cl-item"><span class="cl-line cl-val"></span> Market Value</span>
+   <span class="cl-item"><span class="cl-line cl-cost"></span> Cost Basis</span>
   </div>
-
-  <!-- SLIDERS -->
-  <div class="card">
-    <div class="slider-wrap">
-      <h3>⚙️ Allocation Weights</h3>
-      <div class="srow"><span class="sdot" style="background:var(--blue)"></span><span class="sname">🛡️ Core</span><input type="range" min="0" max="100" value="60" id="slCore" oninput="updateSliders()"><span class="spct" style="color:var(--blue)" id="pCore">60%</span></div>
-      <div class="srow"><span class="sdot" style="background:var(--purple)"></span><span class="sname">🎯 Satellite</span><input type="range" min="0" max="100" value="20" id="slSat" oninput="updateSliders()"><span class="spct" style="color:var(--purple)" id="pSat">20%</span></div>
-      <div class="srow"><span class="sdot" style="background:var(--orange)"></span><span class="sname">🚀 Growth</span><input type="range" min="0" max="100" value="15" id="slGrowth" oninput="updateSliders()"><span class="spct" style="color:var(--orange)" id="pGrowth">15%</span></div>
-      <div class="srow"><span class="sdot" style="background:var(--cyan)"></span><span class="sname">💵 Cash</span><input type="range" min="0" max="100" value="5" id="slCash" oninput="updateSliders()"><span class="spct" style="color:var(--cyan)" id="pCash">5%</span></div>
-      <div class="swarn" id="slWarn"></div>
-    </div>
   </div>
-
-  <!-- BUCKETS -->
-  <div class="bgrid" id="bucketsGrid"></div>
-
-  <!-- HISTORY -->
-  <div class="card">
-    <div class="hist">
-      <h3>📋 Allocation History</h3>
-      <div id="histContent"><div class="hempty">No allocations yet — enter an amount above to start.</div></div>
-    </div>
-  </div>
-
-  <div class="status" id="statusBar">Prices will load automatically...</div>
+  <canvas id="valueChart"></canvas>
+ </div>
+ </div>
+ <div class="card">
+ <div class="slider-wrap">
+  <h3>⚙️ Allocation Weights</h3>
+  <div class="srow"><span class="sdot" style="background:var(--blue)"></span><span class="sname">🛡️ Core</span><input type="range" min="0" max="100" value="60" id="slCore" oninput="updateSliders()"><span class="spct" style="color:var(--blue)" id="pCore">60%</span></div>
+  <div class="srow"><span class="sdot" style="background:var(--purple)"></span><span class="sname">🎯 Satellite</span><input type="range" min="0" max="100" value="20" id="slSat" oninput="updateSliders()"><span class="spct" style="color:var(--purple)" id="pSat">20%</span></div>
+  <div class="srow"><span class="sdot" style="background:var(--orange)"></span><span class="sname">🚀 Growth</span><input type="range" min="0" max="100" value="15" id="slGrowth" oninput="updateSliders()"><span class="spct" style="color:var(--orange)" id="pGrowth">15%</span></div>
+  <div class="srow"><span class="sdot" style="background:var(--cyan)"></span><span class="sname">💵 Cash</span><input type="range" min="0" max="100" value="5" id="slCash" oninput="updateSliders()"><span class="spct" style="color:var(--cyan)" id="pCash">5%</span></div>
+  <div class="swarn" id="slWarn"></div>
+ </div>
+ </div>
+ <div class="bgrid" id="bucketsGrid"></div>
+ <div class="card">
+ <div class="hist">
+  <h3>📋 Allocation History</h3>
+  <div id="histContent"><div class="hempty">No allocations yet — enter an amount above to start.</div></div>
+ </div>
+ </div>
+ <div class="status" id="statusBar">Prices will load automatically...</div>
 </div>
-
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
-
-<!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay">
-  <div class="modal" id="modalBox">
-    <h2 id="modalTitle">Edit Holdings</h2>
-    <div class="msub" id="modalSub">Adjust weights and holdings for this bucket</div>
-    <div id="modalHoldings"></div>
-    <div class="madd-row">
-      <input class="mi-tick" id="addTicker" placeholder="TICKER" maxlength="6">
-      <input class="mi-name" id="addName" placeholder="Full name (e.g. Apple Inc.)">
-      <input class="mi-wt" id="addWeight" placeholder="Wt %" type="number" min="1" max="100">
-      <button class="btn btn-g btn-sm" onclick="addHolding()">+ Add</button>
-    </div>
-    <div class="mfooter">
-      <span class="mwarn" id="modalWarn"></span>
-      <div class="mbtns">
-        <button class="btn btn-s btn-sm" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-p btn-sm" onclick="saveModal()">💾 Save Changes</button>
-      </div>
-    </div>
+ <div class="modal" id="modalBox">
+ <h2 id="modalTitle">Edit Holdings</h2>
+ <div class="msub" id="modalSub">Adjust weights and holdings for this bucket</div>
+ <div id="modalHoldings"></div>
+ <div class="madd-row">
+  <input class="mi-tick" id="addTicker" placeholder="TICKER" maxlength="6">
+  <input class="mi-name" id="addName" placeholder="Full name (e.g. Apple Inc.)">
+  <input class="mi-wt" id="addWeight" placeholder="Wt %" type="number" min="1" max="100">
+  <button class="btn btn-g btn-sm" onclick="addHolding()">+ Add</button>
+ </div>
+ <div class="mfooter">
+  <span class="mwarn" id="modalWarn"></span>
+  <div class="mbtns">
+  <button class="btn btn-s btn-sm" onclick="closeModal()">Cancel</button>
+  <button class="btn btn-p btn-sm" onclick="saveModal()">💾 Save Changes</button>
   </div>
+ </div>
+ </div>
 </div>
 
 <script>
 const API_ENDPOINT = '/api/prices';
+const BUCKET_KEYS = ['core','satellite','growth','cash'];
 
-// ── DEFAULT BUCKETS ──
 const DEFAULT_BUCKETS = {
-  core: {
-    label:'Core — Low-Cost Index Funds', icon:'🛡️', subtitle:'Broad market, ultra-low fees',
-    color:'var(--blue)', bg:'var(--blue-g)',
-    holdings:[
-      {ticker:'VTI', name:'Vanguard Total Stock Market ETF', weight:40},
-      {ticker:'VXUS',name:'Vanguard Total Intl Stock ETF',   weight:30},
-      {ticker:'BND', name:'Vanguard Total Bond Market ETF',  weight:30}
-    ]
-  },
-  satellite: {
-    label:'Satellite — Thematic & Sector', icon:'🎯', subtitle:'Targeted sector bets for alpha',
-    color:'var(--purple)', bg:'var(--purple-g)',
-    holdings:[
-      {ticker:'QQQ', name:'Invesco Nasdaq-100 ETF',       weight:35},
-      {ticker:'SOXX',name:'iShares Semiconductor ETF',     weight:35},
-      {ticker:'XLV', name:'Health Care Select Sector SPDR',weight:30}
-    ]
-  },
-  growth: {
-    label:'High Growth — Asymmetric Bets', icon:'🚀', subtitle:'High risk / high reward stocks',
-    color:'var(--orange)', bg:'var(--orange-g)',
-    holdings:[
-      {ticker:'NVDA',name:'NVIDIA Corporation',    weight:30},
-      {ticker:'PLTR',name:'Palantir Technologies', weight:25},
-      {ticker:'RKLB',name:'Rocket Lab USA',        weight:25},
-      {ticker:'IONQ',name:'IonQ Inc.',             weight:20}
-    ]
-  },
-  cash: {
-    label:'Cash Reserve', icon:'💵', subtitle:'Dry powder for opportunities',
-    color:'var(--cyan)', bg:'var(--cyan-g)',
-    holdings:[
-      {ticker:'SGOV',name:'iShares 0-3 Month Treasury Bond ETF',weight:100}
-    ]
-  }
+ core:{label:'Core — Low-Cost Index',icon:'🛡️',subtitle:'Broad market, ultra-low fees',color:'var(--blue)',bg:'var(--blue-g)',
+  holdings:[{ticker:'VTI',name:'Vanguard Total Stock Market',weight:40},{ticker:'VXUS',name:'Vanguard Total Intl Stock',weight:30},{ticker:'BND',name:'Vanguard Total Bond Market',weight:30}]},
+ satellite:{label:'Satellite — Thematic',icon:'🎯',subtitle:'Targeted sector bets for alpha',color:'var(--purple)',bg:'var(--purple-g)',
+  holdings:[{ticker:'QQQ',name:'Invesco Nasdaq-100 ETF',weight:35},{ticker:'SOXX',name:'iShares Semiconductor ETF',weight:35},{ticker:'XLV',name:'Health Care Select SPDR',weight:30}]},
+ growth:{label:'High Growth — Asymmetric',icon:'🚀',subtitle:'High risk / high reward',color:'var(--orange)',bg:'var(--orange-g)',
+  holdings:[{ticker:'NVDA',name:'NVIDIA Corporation',weight:30},{ticker:'PLTR',name:'Palantir Technologies',weight:25},{ticker:'RKLB',name:'Rocket Lab USA',weight:25},{ticker:'IONQ',name:'IonQ Inc.',weight:20}]},
+ cash:{label:'Cash Reserve',icon:'💵',subtitle:'Dry powder for opportunities',color:'var(--cyan)',bg:'var(--cyan-g)',
+  holdings:[{ticker:'SGOV',name:'iShares 0-3 Mo Treasury',weight:100}]}
 };
 
 // ── STATE ──
 let buckets, weights, allocated, history, prices = {}, priceErrors = {};
-function loadState(){
-  try{
-    const s=JSON.parse(localStorage.getItem('sfaTwelveVercelState1'));
-    if(s){
-      buckets=s.buckets||JSON.parse(JSON.stringify(DEFAULT_BUCKETS));
-      weights=s.weights||{core:60,satellite:20,growth:15,cash:5};
-      allocated=s.allocated||{core:0,satellite:0,growth:0,cash:0};
-      history=s.history||[];
-      prices=s.prices||{};
-      return;
-    }
-  }catch(e){}
-  buckets=JSON.parse(JSON.stringify(DEFAULT_BUCKETS));
-  weights={core:60,satellite:20,growth:15,cash:5};
-  allocated={core:0,satellite:0,growth:0,cash:0};
-  history=[];
-  prices={};
+let positions = {};
+let valueHistory = [];
+
+function loadState() {
+ try {
+  const s = JSON.parse(localStorage.getItem('sfaState2'));
+  if (s) {
+   buckets = s.buckets || JSON.parse(JSON.stringify(DEFAULT_BUCKETS));
+   weights = s.weights || {core:60,satellite:20,growth:15,cash:5};
+   allocated = s.allocated || {core:0,satellite:0,growth:0,cash:0};
+   history = s.history || [];
+   prices = s.prices || {};
+   positions = s.positions || {};
+   valueHistory = s.valueHistory || [];
+   return;
+  }
+ } catch(e) {}
+ buckets = JSON.parse(JSON.stringify(DEFAULT_BUCKETS));
+ weights = {core:60,satellite:20,growth:15,cash:5};
+ allocated = {core:0,satellite:0,growth:0,cash:0};
+ history = []; prices = {}; positions = {}; valueHistory = [];
 }
-function saveState(){localStorage.setItem('sfaTwelveVercelState1',JSON.stringify({buckets,weights,allocated,history,prices}));}
+
+function saveState() {
+ localStorage.setItem('sfaState2', JSON.stringify({buckets,weights,allocated,history,prices,positions,valueHistory}));
+}
+
 loadState();
 
-// ── UTILS ──
-const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtS=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
-function getAllTickers(){
-  const t=new Set();
-  Object.values(buckets).forEach(b=>b.holdings.forEach(h=>t.add(h.ticker)));
-  return [...t];
+// ── Migrate old allocations without positions ──
+function migratePositions() {
+ const hasAlloc = BUCKET_KEYS.some(k => allocated[k] > 0);
+ const hasPos = BUCKET_KEYS.some(k => positions[k] && Object.keys(positions[k]).length > 0);
+ if (hasAlloc && !hasPos) {
+  BUCKET_KEYS.forEach(key => {
+   positions[key] = {};
+   buckets[key].holdings.forEach(h => {
+    const cb = allocated[key] * (h.weight / 100);
+    if (cb > 0) positions[key][h.ticker] = {shares:0, costBasis:cb};
+   });
+  });
+  saveState();
+ }
+}
+migratePositions();
+
+// ── Auto-fill shares when prices arrive ──
+function autoFillPendingPositions() {
+ let filled = 0;
+ BUCKET_KEYS.forEach(key => {
+  const pos = positions[key];
+  if (!pos) return;
+  for (const ticker of Object.keys(pos)) {
+   const hp = pos[ticker];
+   if (hp.costBasis > 0 && hp.shares === 0) {
+    const p = prices[ticker];
+    if (p && p.price > 0) {
+     hp.shares = hp.costBasis / p.price;
+     filled++;
+    }
+   }
+  }
+ });
+ if (filled > 0) saveState();
+ return filled;
 }
 
-// ── PRICES VIA VERCEL PROXY ──
-async function fetchAllPrices(){
-  const tickers=getAllTickers();
-  document.getElementById('statusBar').innerHTML='<span class="spin"></span> Fetching live prices for '+tickers.length+' symbols...';
-  try{
-    const resp = await fetch(`${API_ENDPOINT}?symbols=${encodeURIComponent(tickers.join(','))}`, { cache:'no-store' });
-    const text = await resp.text();
-    let data;
-    try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(text || 'Invalid JSON from proxy'); }
-    if(!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+// ── UTILS ──
+const fmt = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtS = n => Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
+const fmtPL = n => { const s = n >= 0 ? '+' : '-'; return s + fmt(Math.abs(n)); };
 
-    prices = data.prices || {};
-    priceErrors = data.errors || {};
-    saveState();
+function getAllTickers() {
+ const t = new Set();
+ Object.values(buckets).forEach(b => b.holdings.forEach(h => t.add(h.ticker)));
+ return [...t];
+}
 
-    const now=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    const loaded=Object.keys(prices).length;
-    const failed=tickers.filter(t=>!prices[t]);
-    let msg=`Last updated: <span class="up">${now}</span> · ${loaded}/${tickers.length} symbols loaded`;
-    if(data.cached) msg += ' · cached';
-    if(failed.length) msg += ` · failed: ${failed.slice(0,5).join(', ')}${failed.length>5?'…':''}`;
-    document.getElementById('statusBar').innerHTML=msg;
-    renderAll();
-  }catch(err){
-    document.getElementById('statusBar').innerHTML='⚠️ Price fetch failed: '+err.message;
-    console.error('Price fetch failed:', err);
-    renderAll();
+// ── PORTFOLIO STATS ──
+function getPortfolioStats() {
+ let totalCost = 0, totalValue = 0;
+ const bs = {};
+ BUCKET_KEYS.forEach(key => {
+  bs[key] = {cost:0, value:0};
+  const pos = positions[key] || {};
+  buckets[key].holdings.forEach(h => {
+   const hp = pos[h.ticker];
+   if (hp && hp.costBasis > 0) {
+    const p = prices[h.ticker];
+    const val = (hp.shares > 0 && p && p.price > 0) ? hp.shares * p.price : hp.costBasis;
+    bs[key].cost += hp.costBasis;
+    bs[key].value += val;
+    totalCost += hp.costBasis;
+    totalValue += val;
+   }
+  });
+ });
+ return {totalCost, totalValue, pl:totalValue-totalCost, plPct:totalCost>0?((totalValue-totalCost)/totalCost*100):0, bs};
+}
+
+function recordSnapshot() {
+ const stats = getPortfolioStats();
+ if (stats.totalCost <= 0) return;
+ const now = Date.now();
+ if (valueHistory.length > 0 && now - valueHistory[valueHistory.length-1].ts < 3*60*1000) return;
+ valueHistory.push({ts:now, value:stats.totalValue, cost:stats.totalCost});
+ if (valueHistory.length > 300) valueHistory = valueHistory.slice(-300);
+ saveState();
+}
+
+// ── FETCH PRICES ──
+let retryScheduled = false;
+async function fetchAllPrices() {
+ const tickers = getAllTickers();
+ document.getElementById('statusBar').innerHTML = '<span class="spin"></span> Fetching prices for ' + tickers.length + ' symbols...';
+ try {
+  const resp = await fetch(API_ENDPOINT + '?symbols=' + encodeURIComponent(tickers.join(',')), {cache:'no-store'});
+  const text = await resp.text();
+  let data;
+  try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(text || 'Invalid JSON'); }
+  if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+  prices = data.prices || {};
+  priceErrors = data.errors || {};
+  const filled = autoFillPendingPositions();
+  saveState();
+  const now = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  const loaded = Object.keys(prices).length;
+  const failed = tickers.filter(t => !prices[t]);
+  let msg = 'Last updated: <span class="up">' + now + '</span> · ' + loaded + '/' + tickers.length + ' symbols loaded';
+  if (data.cached) msg += ' · cached';
+  if (filled > 0) msg += ' · ' + filled + ' positions filled';
+  if (failed.length) msg += ' · failed: ' + failed.slice(0,5).join(', ') + (failed.length > 5 ? '…' : '');
+  document.getElementById('statusBar').innerHTML = msg;
+  recordSnapshot();
+  renderAll();
+  if (failed.length > 0 && !retryScheduled) {
+   retryScheduled = true;
+   setTimeout(() => { retryScheduled = false; fetchAllPrices(); }, 25000);
   }
+ } catch(err) {
+  document.getElementById('statusBar').innerHTML = '⚠️ Price fetch failed: ' + err.message + '. Retrying in 20s...';
+  if (!retryScheduled) { retryScheduled = true; setTimeout(() => { retryScheduled = false; fetchAllPrices(); }, 20000); }
+  renderAll();
+ }
 }
 
 // ── SLIDERS ──
-function updateSliders(){
-  weights.core=+document.getElementById('slCore').value;
-  weights.satellite=+document.getElementById('slSat').value;
-  weights.growth=+document.getElementById('slGrowth').value;
-  weights.cash=+document.getElementById('slCash').value;
-  document.getElementById('pCore').textContent=weights.core+'%';
-  document.getElementById('pSat').textContent=weights.satellite+'%';
-  document.getElementById('pGrowth').textContent=weights.growth+'%';
-  document.getElementById('pCash').textContent=weights.cash+'%';
-  const tot=weights.core+weights.satellite+weights.growth+weights.cash;
-  document.getElementById('slWarn').textContent=tot!==100?`⚠️ Weights total ${tot}% — must equal 100%`:'';
-  saveState(); renderAllocBar();
+function updateSliders() {
+ weights.core = +document.getElementById('slCore').value;
+ weights.satellite = +document.getElementById('slSat').value;
+ weights.growth = +document.getElementById('slGrowth').value;
+ weights.cash = +document.getElementById('slCash').value;
+ document.getElementById('pCore').textContent = weights.core + '%';
+ document.getElementById('pSat').textContent = weights.satellite + '%';
+ document.getElementById('pGrowth').textContent = weights.growth + '%';
+ document.getElementById('pCash').textContent = weights.cash + '%';
+ const tot = weights.core + weights.satellite + weights.growth + weights.cash;
+ document.getElementById('slWarn').textContent = tot !== 100 ? '⚠️ Weights total ' + tot + '% — must equal 100%' : '';
+ saveState();
+ renderAllocBar();
 }
-function loadSliders(){
-  document.getElementById('slCore').value=weights.core;
-  document.getElementById('slSat').value=weights.satellite;
-  document.getElementById('slGrowth').value=weights.growth;
-  document.getElementById('slCash').value=weights.cash;
-  updateSliders();
+
+function loadSliders() {
+ document.getElementById('slCore').value = weights.core;
+ document.getElementById('slSat').value = weights.satellite;
+ document.getElementById('slGrowth').value = weights.growth;
+ document.getElementById('slCash').value = weights.cash;
+ updateSliders();
 }
 
 // ── ALLOCATE ──
-function allocateFunds(){
-  const raw=document.getElementById('cashInput').value.replace(/[^0-9.]/g,'');
-  const amt=parseFloat(raw);
-  if(!amt||amt<=0){toast('Enter a valid amount','err');return;}
-  const tot=weights.core+weights.satellite+weights.growth+weights.cash;
-  if(tot!==100){toast('Weights must total 100%','err');return;}
-  const note=document.getElementById('noteInput').value.trim();
-  const c=amt*(weights.core/100), s=amt*(weights.satellite/100), g=amt*(weights.growth/100), ca=amt*(weights.cash/100);
-  allocated.core+=c; allocated.satellite+=s; allocated.growth+=g; allocated.cash+=ca;
-  history.unshift({date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),amount:amt,core:c,satellite:s,growth:g,cash:ca,note});
-  saveState(); renderAll();
-  document.getElementById('cashInput').value='';
-  document.getElementById('noteInput').value='';
-  toast(fmt(amt)+' allocated!','ok');
+function allocateFunds() {
+ const raw = document.getElementById('cashInput').value.replace(/[^0-9.]/g, '');
+ const amt = parseFloat(raw);
+ if (!amt || amt <= 0) { toast('Enter a valid amount','err'); return; }
+ const tot = weights.core + weights.satellite + weights.growth + weights.cash;
+ if (tot !== 100) { toast('Weights must total 100%','err'); return; }
+ const note = document.getElementById('noteInput').value.trim();
+ const c = amt*(weights.core/100), s = amt*(weights.satellite/100), g = amt*(weights.growth/100), ca = amt*(weights.cash/100);
+ allocated.core += c; allocated.satellite += s; allocated.growth += g; allocated.cash += ca;
+
+ const noPriceTickers = [];
+ const bAmts = {core:c, satellite:s, growth:g, cash:ca};
+ BUCKET_KEYS.forEach(key => {
+  if (!positions[key]) positions[key] = {};
+  buckets[key].holdings.forEach(h => {
+   const holdAmt = bAmts[key] * (h.weight / 100);
+   if (holdAmt <= 0) return;
+   if (!positions[key][h.ticker]) positions[key][h.ticker] = {shares:0, costBasis:0};
+   const p = prices[h.ticker];
+   if (p && p.price > 0) {
+    positions[key][h.ticker].shares += holdAmt / p.price;
+    positions[key][h.ticker].costBasis += holdAmt;
+   } else {
+    positions[key][h.ticker].costBasis += holdAmt;
+    noPriceTickers.push(h.ticker);
+   }
+  });
+ });
+
+ history.unshift({date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}), amount:amt, core:c, satellite:s, growth:g, cash:ca, note});
+ saveState();
+ renderAll();
+ document.getElementById('cashInput').value = '';
+ document.getElementById('noteInput').value = '';
+ const unique = [...new Set(noPriceTickers)];
+ if (unique.length > 0) toast(fmt(amt) + ' allocated! ⚠️ No price for: ' + unique.join(', '), 'err');
+ else toast(fmt(amt) + ' allocated!', 'ok');
 }
-function resetAll(){
-  if(!confirm('Reset ALL allocations, history, and custom holdings?'))return;
-  localStorage.removeItem('sfaTwelveVercelState1');
-  loadState(); loadSliders(); renderAll(); toast('Portfolio reset','ok');
+
+function resetAll() {
+ if (!confirm('Reset ALL allocations, positions, history?')) return;
+ localStorage.removeItem('sfaState2');
+ loadState(); loadSliders(); renderAll(); toast('Portfolio reset','ok');
 }
 
 // ── RENDER ──
-function renderAll(){renderSummary();renderAllocBar();renderBuckets();renderHistory();}
-function renderSummary(){
-  const t=allocated.core+allocated.satellite+allocated.growth+allocated.cash;
-  document.getElementById('stTotal').textContent=fmt(t);
-  document.getElementById('stCore').textContent=fmt(allocated.core);
-  document.getElementById('stSat').textContent=fmt(allocated.satellite);
-  document.getElementById('stGrowth').textContent=fmt(allocated.growth);
-  document.getElementById('stCash').textContent=fmt(allocated.cash);
-}
-function renderAllocBar(){
-  const t=allocated.core+allocated.satellite+allocated.growth+allocated.cash;
-  const bar=document.getElementById('allocBar');
-  if(t===0){
-    bar.innerHTML=`<div class="seg" style="width:${weights.core}%;background:var(--blue);opacity:.4"></div><div class="seg" style="width:${weights.satellite}%;background:var(--purple);opacity:.4"></div><div class="seg" style="width:${weights.growth}%;background:var(--orange);opacity:.4"></div><div class="seg" style="width:${weights.cash}%;background:var(--cyan);opacity:.4"></div>`;
+function renderAll() { renderSummary(); renderAllocBar(); renderBuckets(); renderHistory(); renderValueChart(); }
+
+function renderSummary() {
+ const stats = getPortfolioStats();
+ const totalAlloc = allocated.core + allocated.satellite + allocated.growth + allocated.cash;
+ const hasCost = stats.totalCost > 0;
+
+ document.getElementById('stTotal').textContent = fmt(hasCost ? stats.totalCost : totalAlloc);
+ document.getElementById('stMktVal').textContent = hasCost ? fmt(stats.totalValue) : '—';
+
+ const plEl = document.getElementById('stPL');
+ const plPctEl = document.getElementById('stPLpct');
+ if (hasCost) {
+  plEl.textContent = fmtPL(stats.pl);
+  plEl.style.color = stats.pl >= 0 ? 'var(--green)' : 'var(--red)';
+  plPctEl.textContent = (stats.pl >= 0 ? '+' : '') + stats.plPct.toFixed(2) + '%';
+  plPctEl.style.color = stats.pl >= 0 ? 'var(--green)' : 'var(--red)';
+ } else {
+  plEl.textContent = '—'; plEl.style.color = 'var(--t3)';
+  plPctEl.textContent = '';
+ }
+
+ const bCfg = {core:{sv:'stCore',pl:'stCorePL'}, satellite:{sv:'stSat',pl:'stSatPL'}, growth:{sv:'stGrowth',pl:'stGrowthPL'}, cash:{sv:'stCash',pl:'stCashPL'}};
+ Object.entries(bCfg).forEach(([key, cfg]) => {
+  const b = stats.bs[key];
+  const svEl = document.getElementById(cfg.sv);
+  const plBEl = document.getElementById(cfg.pl);
+  if (b.cost > 0) {
+   svEl.textContent = fmt(b.value);
+   const bpl = b.value - b.cost;
+   const bpct = (bpl / b.cost * 100);
+   plBEl.textContent = fmtPL(bpl) + ' (' + (bpl >= 0 ? '+' : '') + bpct.toFixed(1) + '%)';
+   plBEl.style.color = bpl >= 0 ? 'var(--green)' : 'var(--red)';
   } else {
-    bar.innerHTML=`<div class="seg" style="width:${(allocated.core/t*100).toFixed(1)}%;background:var(--blue)"></div><div class="seg" style="width:${(allocated.satellite/t*100).toFixed(1)}%;background:var(--purple)"></div><div class="seg" style="width:${(allocated.growth/t*100).toFixed(1)}%;background:var(--orange)"></div><div class="seg" style="width:${(allocated.cash/t*100).toFixed(1)}%;background:var(--cyan)"></div>`;
+   svEl.textContent = fmt(allocated[key]);
+   plBEl.textContent = ''; plBEl.style.color = 'var(--t3)';
   }
-}
-function renderBuckets(){
-  const grid=document.getElementById('bucketsGrid');
-  grid.innerHTML='';
-  const keys=['core','satellite','growth','cash'];
-  const totalAll=allocated.core+allocated.satellite+allocated.growth+allocated.cash;
-  keys.forEach(key=>{
-    const b=buckets[key];
-    const alloc=allocated[key];
-    const pct=totalAll>0?(alloc/totalAll*100).toFixed(1):'0.0';
-    let rows='';
-    b.holdings.forEach(h=>{
-      const p=prices[h.ticker];
-      const priceStr=p?fmt(p.price):'—';
-      const chg=p?Number(p.change||0):0;
-      const chgCls=chg>=0?'up':'down';
-      const chgStr=p?(chg>=0?'+':'')+chg.toFixed(2)+'%':'—';
-      const hAmt=alloc*(h.weight/100);
-      const shares=(p&&p.price>0)?hAmt/p.price:0;
-      rows+=`<div class="hrow"><span class="htick">${h.ticker}</span><span class="hname">${h.name}</span><span class="hprice">${priceStr}</span><span class="hchg ${chgCls}">${chgStr}</span><span class="halloc">${fmt(hAmt)}</span><span class="hshares">${shares>0?fmtS(shares)+' sh':'—'}</span></div>`;
-    });
-    grid.innerHTML+=`<div class="bcard"><div class="bhead"><div class="bhl"><div class="bicon" style="background:${b.bg};color:${b.color}">${b.icon}</div><div><div class="btitle">${b.label}</div><div class="bsub">${b.subtitle}</div></div></div><div style="display:flex;align-items:center;gap:12px;"><div><div class="bamt" style="color:${b.color}">${fmt(alloc)}</div><div class="bpct">${pct}% of portfolio</div></div><div class="bedit" onclick="openModal('${key}')">✏️ Edit</div></div></div><div class="bbody">${rows}</div></div>`;
-  });
-}
-function renderHistory(){
-  const el=document.getElementById('histContent');
-  if(!history.length){el.innerHTML='<div class="hempty">No allocations yet — enter an amount above to start.</div>';return;}
-  let rows=history.map(h=>`<tr><td>${h.date}</td><td>${fmt(h.amount)}</td><td>${fmt(h.core)}</td><td>${fmt(h.satellite)}</td><td>${fmt(h.growth)}</td><td>${fmt(h.cash)}</td><td>${h.note||'—'}</td></tr>`).join('');
-  el.innerHTML=`<table class="htable"><thead><tr><th>Date</th><th>Amount</th><th>Core</th><th>Satellite</th><th>Growth</th><th>Cash</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`;
+ });
 }
 
-// ── MODAL (Edit Holdings) ──
-let editingBucket=null;
-let editHoldings=[];
-function openModal(key){
-  editingBucket=key;
-  const b=buckets[key];
-  editHoldings=b.holdings.map(h=>({...h}));
-  document.getElementById('modalTitle').textContent=b.icon+' Edit: '+b.label;
-  document.getElementById('modalSub').textContent='Add, remove, or reweight holdings. Weights within this bucket should total 100%.';
-  renderModalHoldings();
-  document.getElementById('addTicker').value='';
-  document.getElementById('addName').value='';
-  document.getElementById('addWeight').value='';
-  document.getElementById('modalOverlay').classList.add('open');
-}
-function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); editingBucket=null; }
-function renderModalHoldings(){
-  const el=document.getElementById('modalHoldings');
-  let html='';
-  editHoldings.forEach((h,i)=>{
-    html+=`<div class="mhold"><span class="mtick">${h.ticker}</span><span class="mname">${h.name}</span><input class="mwt" type="number" min="1" max="100" value="${h.weight}" onchange="editWeight(${i},this.value)"><span style="font-size:.75rem;color:var(--t3)">%</span><span class="mdel" onclick="removeHolding(${i})">✕ Remove</span></div>`;
-  });
-  el.innerHTML=html; validateModal();
-}
-function editWeight(i,val){ editHoldings[i].weight=Math.max(1,Math.min(100,parseInt(val)||0)); validateModal(); }
-function removeHolding(i){ editHoldings.splice(i,1); renderModalHoldings(); }
-function addHolding(){
-  const ticker=document.getElementById('addTicker').value.trim().toUpperCase();
-  const name=document.getElementById('addName').value.trim();
-  const weight=parseInt(document.getElementById('addWeight').value)||0;
-  if(!ticker){toast('Enter a ticker symbol','err');return;}
-  if(!name){toast('Enter the fund/stock name','err');return;}
-  if(weight<1||weight>100){toast('Weight must be 1-100','err');return;}
-  if(editHoldings.find(h=>h.ticker===ticker)){toast(ticker+' already exists','err');return;}
-  editHoldings.push({ticker,name,weight});
-  document.getElementById('addTicker').value='';
-  document.getElementById('addName').value='';
-  document.getElementById('addWeight').value='';
-  renderModalHoldings();
-}
-function validateModal(){
-  const tot=editHoldings.reduce((s,h)=>s+h.weight,0);
-  const warn=document.getElementById('modalWarn');
-  if(editHoldings.length===0) warn.textContent='⚠️ Bucket has no holdings';
-  else if(tot!==100) warn.textContent=`⚠️ Weights total ${tot}% — should be 100%`;
-  else warn.textContent='✅ Weights balanced';
-}
-function saveModal(){
-  if(!editingBucket)return;
-  const tot=editHoldings.reduce((s,h)=>s+h.weight,0);
-  if(editHoldings.length===0){toast('Add at least one holding','err');return;}
-  if(tot!==100){ if(!confirm(`Weights total ${tot}%, not 100%. Save anyway?`))return; }
-  buckets[editingBucket].holdings=editHoldings.map(h=>({...h}));
-  saveState(); closeModal(); fetchAllPrices(); toast('Holdings updated!','ok');
+function renderAllocBar() {
+ const t = allocated.core + allocated.satellite + allocated.growth + allocated.cash;
+ const bar = document.getElementById('allocBar');
+ if (t === 0) {
+  bar.innerHTML = '<div class="seg" style="width:'+weights.core+'%;background:var(--blue);opacity:.4"></div><div class="seg" style="width:'+weights.satellite+'%;background:var(--purple);opacity:.4"></div><div class="seg" style="width:'+weights.growth+'%;background:var(--orange);opacity:.4"></div><div class="seg" style="width:'+weights.cash+'%;background:var(--cyan);opacity:.4"></div>';
+ } else {
+  bar.innerHTML = '<div class="seg" style="width:'+(allocated.core/t*100).toFixed(1)+'%;background:var(--blue)"></div><div class="seg" style="width:'+(allocated.satellite/t*100).toFixed(1)+'%;background:var(--purple)"></div><div class="seg" style="width:'+(allocated.growth/t*100).toFixed(1)+'%;background:var(--orange)"></div><div class="seg" style="width:'+(allocated.cash/t*100).toFixed(1)+'%;background:var(--cyan)"></div>';
+ }
 }
 
-const modalOverlayEl=document.getElementById('modalOverlay');
-if(modalOverlayEl) modalOverlayEl.addEventListener('click',function(e){if(e.target===this)closeModal();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-function toast(msg,type){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast '+type+' show'; setTimeout(()=>{t.className='toast';},3000); }
-document.getElementById('cashInput').addEventListener('keydown',e=>{if(e.key==='Enter')allocateFunds();});
-document.getElementById('cashInput').addEventListener('input',function(){ let v=this.value.replace(/[^0-9.]/g,''); const p=v.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); this.value=p.join('.'); });
+function renderBuckets() {
+ const grid = document.getElementById('bucketsGrid');
+ grid.innerHTML = '';
+ const totalAll = allocated.core + allocated.satellite + allocated.growth + allocated.cash;
+
+ BUCKET_KEYS.forEach(key => {
+  const b = buckets[key];
+  const pos = positions[key] || {};
+
+  let bCost = 0, bValue = 0;
+  b.holdings.forEach(h => {
+   const hp = pos[h.ticker];
+   if (hp && hp.costBasis > 0) {
+    const p = prices[h.ticker];
+    const val = (hp.shares > 0 && p && p.price > 0) ? hp.shares * p.price : hp.costBasis;
+    bCost += hp.costBasis;
+    bValue += val;
+   }
+  });
+  const bPL = bValue - bCost;
+  const bPLpct = bCost > 0 ? ((bPL / bCost) * 100) : 0;
+
+  let headerRight = '';
+  if (bCost > 0) {
+   const plCol = bPL >= 0 ? 'var(--green)' : 'var(--red)';
+   headerRight = '<div><div class="bamt" style="color:'+b.color+'">'+fmt(bValue)+'</div><div class="bpct" style="color:'+plCol+'">'+fmtPL(bPL)+' ('+(bPL>=0?'+':'')+bPLpct.toFixed(1)+'%)</div></div>';
+  } else {
+   const pct = totalAll > 0 ? (allocated[key]/totalAll*100).toFixed(1) : '0.0';
+   headerRight = '<div><div class="bamt" style="color:'+b.color+'">'+fmt(allocated[key])+'</div><div class="bpct" style="color:var(--t3)">'+pct+'% of portfolio</div></div>';
+  }
+
+  let colHdr = '<div class="hrow hrow-header"><span>Sym</span><span>Name</span><span style="text-align:right">Price</span><span style="text-align:center">Chg</span><span style="text-align:right">Shares</span><span style="text-align:right">Value / P&L</span></div>';
+
+  let rows = '';
+  b.holdings.forEach(h => {
+   const p = prices[h.ticker];
+   const priceStr = p ? fmt(p.price) : '—';
+   const chg = p ? Number(p.change || 0) : 0;
+   const chgCls = chg >= 0 ? 'up' : 'down';
+   const chgStr = p ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '—';
+
+   const hp = pos[h.ticker] || {shares:0, costBasis:0};
+   const shares = hp.shares;
+   const costBasis = hp.costBasis;
+   const avgCost = shares > 0 ? (costBasis / shares) : 0;
+   const mktVal = (p && p.price > 0 && shares > 0) ? shares * p.price : 0;
+   const pl = (shares > 0 && mktVal > 0) ? mktVal - costBasis : 0;
+   const plPct = (costBasis > 0 && shares > 0 && mktVal > 0) ? ((pl / costBasis) * 100) : 0;
+
+   let sharesHtml = '—';
+   if (shares > 0) sharesHtml = fmtS(shares) + '<span class="havg-sub">@' + fmt(avgCost) + '</span>';
+
+   let valPlHtml = '—';
+   if (shares > 0 && mktVal > 0) {
+    const plCls = pl >= 0 ? 'up' : 'down';
+    valPlHtml = fmt(mktVal) + '<span class="hpl-line ' + plCls + '">' + fmtPL(pl) + ' (' + (pl >= 0 ? '+' : '') + plPct.toFixed(1) + '%)</span>';
+   } else if (costBasis > 0) {
+    valPlHtml = '<span style="color:var(--t3);font-size:.68rem">' + fmt(costBasis) + ' pending</span>';
+   }
+
+   rows += '<div class="hrow"><span class="htick">' + h.ticker + '</span><span class="hname">' + h.name + '</span><span class="hprice">' + priceStr + '</span><span class="hchg ' + chgCls + '">' + chgStr + '</span><span class="hshares">' + sharesHtml + '</span><span class="hvalpl">' + valPlHtml + '</span></div>';
+  });
+
+  let footHtml = '';
+  if (bCost > 0) {
+   const plCol = bPL >= 0 ? 'var(--green)' : 'var(--red)';
+   footHtml = '<div class="bfoot"><span>Cost: ' + fmt(bCost) + '</span><span>Value: ' + fmt(bValue) + '</span><span style="color:' + plCol + ';font-weight:700">P&L: ' + fmtPL(bPL) + ' (' + (bPL>=0?'+':'') + bPLpct.toFixed(1) + '%)</span></div>';
+  }
+
+  grid.innerHTML += '<div class="bcard"><div class="bhead"><div class="bhl"><div class="bicon" style="background:'+b.bg+';color:'+b.color+'">'+b.icon+'</div><div><div class="btitle">'+b.label+'</div><div class="bsub">'+b.subtitle+'</div></div></div><div style="display:flex;align-items:center;gap:10px;">'+headerRight+'<div class="bedit" onclick="openModal(\''+key+'\')">✏️ Edit</div></div></div><div class="bbody">'+colHdr+rows+'</div>'+footHtml+'</div>';
+ });
+}
+
+function renderHistory() {
+ const el = document.getElementById('histContent');
+ if (!history.length) { el.innerHTML = '<div class="hempty">No allocations yet — enter an amount above to start.</div>'; return; }
+ let rows = history.map(h => '<tr><td>'+h.date+'</td><td>'+fmt(h.amount)+'</td><td>'+fmt(h.core)+'</td><td>'+fmt(h.satellite)+'</td><td>'+fmt(h.growth)+'</td><td>'+fmt(h.cash)+'</td><td>'+(h.note||'—')+'</td></tr>').join('');
+ el.innerHTML = '<table class="htable"><thead><tr><th>Date</th><th>Amount</th><th>Core</th><th>Satellite</th><th>Growth</th><th>Cash</th><th>Note</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// ── VALUE CHART ──
+function renderValueChart() {
+ const card = document.getElementById('chartCard');
+ if (valueHistory.length < 2) { card.style.display = 'none'; return; }
+ card.style.display = 'block';
+ const canvas = document.getElementById('valueChart');
+ const ctx = canvas.getContext('2d');
+ const dpr = window.devicePixelRatio || 1;
+ const rect = canvas.getBoundingClientRect();
+ canvas.width = rect.width * dpr;
+ canvas.height = rect.height * dpr;
+ ctx.scale(dpr, dpr);
+ const W = rect.width, H = rect.height;
+ const pad = {top:16, right:16, bottom:30, left:62};
+ const pW = W - pad.left - pad.right, pH = H - pad.top - pad.bottom;
+ const vals = valueHistory.map(v => v.value), costs = valueHistory.map(v => v.cost), times = valueHistory.map(v => v.ts);
+ const allN = [...vals, ...costs];
+ let minY = Math.min(...allN), maxY = Math.max(...allN);
+ const rng = maxY - minY;
+ minY -= rng * 0.06 || 1;
+ maxY += rng * 0.06 || 1;
+ const minT = times[0], maxT = times[times.length-1], tR = maxT - minT || 1;
+ const xP = i => pad.left + (times[i] - minT) / tR * pW;
+ const yP = v => pad.top + (1 - (v - minY) / (maxY - minY)) * pH;
+ ctx.clearRect(0, 0, W, H);
+ ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '11px Inter,sans-serif';
+ for (let i = 0; i <= 4; i++) {
+  const yy = pad.top + pH * i / 4;
+  const val = maxY - (maxY - minY) * i / 4;
+  ctx.strokeStyle = 'rgba(39,51,84,0.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(W - pad.right, yy); ctx.stroke();
+  ctx.fillStyle = '#5c6b8a';
+  ctx.fillText('$' + val.toLocaleString('en-US',{maximumFractionDigits:0}), pad.left - 6, yy);
+ }
+ ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+ const nL = Math.min(valueHistory.length, 5);
+ for (let i = 0; i < nL; i++) {
+  const idx = Math.floor(i * (valueHistory.length - 1) / Math.max(nL - 1, 1));
+  const d = new Date(times[idx]);
+  ctx.fillStyle = '#5c6b8a';
+  ctx.fillText(d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}), xP(idx), pad.top + pH + 8);
+ }
+ ctx.setLineDash([5,4]); ctx.strokeStyle = 'rgba(148,163,200,0.25)'; ctx.lineWidth = 1.5;
+ ctx.beginPath(); costs.forEach((c,i) => { i === 0 ? ctx.moveTo(xP(i), yP(c)) : ctx.lineTo(xP(i), yP(c)); }); ctx.stroke(); ctx.setLineDash([]);
+ const lastPL = vals[vals.length-1] - costs[costs.length-1];
+ const gc = lastPL >= 0 ? [16,185,129] : [239,68,68];
+ const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + pH);
+ grad.addColorStop(0, 'rgba('+gc.join(',')+',0.2)'); grad.addColorStop(1, 'rgba('+gc.join(',')+',0)');
+ ctx.beginPath(); ctx.moveTo(xP(0), yP(vals[0]));
+ vals.forEach((v,i) => { if (i > 0) ctx.lineTo(xP(i), yP(v)); });
+ ctx.lineTo(xP(vals.length-1), pad.top + pH); ctx.lineTo(xP(0), pad.top + pH); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+ ctx.strokeStyle = lastPL >= 0 ? '#10b981' : '#ef4444'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+ ctx.beginPath(); vals.forEach((v,i) => { i === 0 ? ctx.moveTo(xP(i), yP(v)) : ctx.lineTo(xP(i), yP(v)); }); ctx.stroke();
+ const lx = xP(vals.length-1), ly = yP(vals[vals.length-1]);
+ ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI*2); ctx.fillStyle = lastPL >= 0 ? '#10b981' : '#ef4444'; ctx.fill();
+}
+window.addEventListener('resize', () => { if (valueHistory.length >= 2) renderValueChart(); });
+
+// ── MODAL ──
+let editingBucket = null, editHoldings = [];
+
+function openModal(key) {
+ editingBucket = key;
+ const b = buckets[key];
+ editHoldings = b.holdings.map(h => ({...h}));
+ document.getElementById('modalTitle').textContent = b.icon + ' Edit: ' + b.label;
+ document.getElementById('modalSub').textContent = 'Add, remove, or reweight holdings. Weights should total 100%.';
+ renderModalHoldings();
+ document.getElementById('addTicker').value = '';
+ document.getElementById('addName').value = '';
+ document.getElementById('addWeight').value = '';
+ document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+ document.getElementById('modalOverlay').classList.remove('open');
+ editingBucket = null;
+}
+
+function renderModalHoldings() {
+ const el = document.getElementById('modalHoldings');
+ let html = '';
+ editHoldings.forEach((h, i) => {
+  html += '<div class="mhold"><span class="mtick">'+h.ticker+'</span><span class="mname">'+h.name+'</span><input class="mwt" type="number" min="1" max="100" value="'+h.weight+'" onchange="editWeight('+i+',this.value)"><span style="font-size:.75rem;color:var(--t3)">%</span><span class="mdel" onclick="removeHolding('+i+')">✕</span></div>';
+ });
+ el.innerHTML = html;
+ validateModal();
+}
+
+function editWeight(i, val) {
+ editHoldings[i].weight = Math.max(1, Math.min(100, parseInt(val) || 0));
+ validateModal();
+}
+
+function removeHolding(i) {
+ editHoldings.splice(i, 1);
+ renderModalHoldings();
+}
+
+function addHolding() {
+ const ticker = document.getElementById('addTicker').value.trim().toUpperCase();
+ const name = document.getElementById('addName').value.trim();
+ const weight = parseInt(document.getElementById('addWeight').value) || 0;
+ if (!ticker) { toast('Enter a ticker','err'); return; }
+ if (!name) { toast('Enter the name','err'); return; }
+ if (weight < 1 || weight > 100) { toast('Weight 1-100','err'); return; }
+ if (editHoldings.find(h => h.ticker === ticker)) { toast(ticker + ' exists','err'); return; }
+ editHoldings.push({ticker, name, weight});
+ document.getElementById('addTicker').value = '';
+ document.getElementById('addName').value = '';
+ document.getElementById('addWeight').value = '';
+ renderModalHoldings();
+}
+
+function validateModal() {
+ const tot = editHoldings.reduce((s,h) => s + h.weight, 0);
+ const w = document.getElementById('modalWarn');
+ if (!editHoldings.length) w.textContent = '⚠️ No holdings';
+ else if (tot !== 100) w.textContent = '⚠️ Weights total ' + tot + '%';
+ else w.textContent = '✅ Balanced';
+}
+
+function saveModal() {
+ if (!editingBucket) return;
+ const tot = editHoldings.reduce((s,h) => s + h.weight, 0);
+ if (!editHoldings.length) { toast('Add a holding','err'); return; }
+ if (tot !== 100 && !confirm('Weights total ' + tot + '%. Save anyway?')) return;
+
+ const key = editingBucket;
+
+ // ── Preserve total bucket cost basis and redistribute ──
+ const oldPos = positions[key] || {};
+ const totalBucketCost = Object.values(oldPos).reduce((sum, p) => sum + (p.costBasis || 0), 0);
+
+ // Build new positions for this bucket
+ const newPos = {};
+ if (totalBucketCost > 0) {
+  const wtTotal = tot; // use actual weight total
+  editHoldings.forEach(h => {
+   const cb = totalBucketCost * (h.weight / wtTotal);
+   const p = prices[h.ticker];
+   const shares = (p && p.price > 0) ? cb / p.price : 0;
+   newPos[h.ticker] = {shares: shares, costBasis: cb};
+  });
+ }
+ positions[key] = newPos;
+
+ // Update holdings list
+ buckets[key].holdings = editHoldings.map(h => ({...h}));
+
+ saveState();
+ closeModal();
+ fetchAllPrices();
+ toast('Holdings updated — allocation preserved!', 'ok');
+}
+
+document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function toast(msg, type) {
+ const t = document.getElementById('toast');
+ t.textContent = msg;
+ t.className = 'toast ' + type + ' show';
+ setTimeout(() => { t.className = 'toast'; }, 3500);
+}
+
+document.getElementById('cashInput').addEventListener('keydown', e => { if (e.key === 'Enter') allocateFunds(); });
+document.getElementById('cashInput').addEventListener('input', function() {
+ let v = this.value.replace(/[^0-9.]/g, '');
+ const p = v.split('.');
+ p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+ this.value = p.join('.');
+});
 
 loadSliders();
 renderAll();
 fetchAllPrices();
-// Auto-refresh intentionally disabled to preserve free-tier credits.
 </script>
 </body>
 </html>
