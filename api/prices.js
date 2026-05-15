@@ -8,7 +8,13 @@ function parseQuote(d) {
   if (!d || typeof d !== 'object' || d.status === 'error') return null;
   const price = Number(d.close ?? d.price ?? d.previous_close ?? 0);
   if (!Number.isFinite(price) || price <= 0) return null;
-  return { price, change: Number(d.percent_change ?? 0), prev: Number(d.previous_close ?? 0) };
+  const change = Number(d.percent_change ?? d.change_percent ?? 0);
+  let prev = Number(d.previous_close ?? 0);
+  /* If previous_close is missing but we have change%, calculate it */
+  if ((!prev || prev <= 0) && price > 0 && change !== 0) {
+    prev = price / (1 + change / 100);
+  }
+  return { price, change, prev: Number(prev.toFixed(4)) };
 }
 
 export default async function handler(req, res) {
