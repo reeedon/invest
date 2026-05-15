@@ -196,7 +196,7 @@
 "use strict";
 const API_ENDPOINT='/api/prices';
 const BUCKET_KEYS=['core','satellite','growth','cash'];
-const BENCH_TICKER='SPY'; // S&P 500 proxy
+const BENCH_TICKER='SPY';
 const DEFAULT_BUCKETS={
  core:{label:'Core — Low-Cost Index',icon:'🛡️',subtitle:'Broad market, ultra-low fees',color:'var(--blue)',bg:'var(--blue-g)',
   holdings:[{ticker:'VTI',name:'Vanguard Total Stock Market',weight:40},{ticker:'VXUS',name:'Vanguard Total Intl Stock',weight:30},{ticker:'BND',name:'Vanguard Total Bond Market',weight:30}]},
@@ -209,7 +209,7 @@ const DEFAULT_BUCKETS={
 };
 
 let buckets,weights,allocated,allocLog,prices,positions,valueHistory;
-let benchShares=0; // SPY shares if all $ went to S&P 500
+let benchShares=0;
 
 function freshState(){buckets=JSON.parse(JSON.stringify(DEFAULT_BUCKETS));weights={core:60,satellite:20,growth:15,cash:5};allocated={core:0,satellite:0,growth:0,cash:0};allocLog=[];prices={};positions={};valueHistory=[];benchShares=0;}
 function loadState(){
@@ -234,13 +234,7 @@ function autoFillPending(){
 const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtS=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4});
 const fmtPL=n=>(n>=0?'+':'-')+fmt(Math.abs(n));
-function getAllTickers(){
- let t=new Set();
- Object.values(buckets).forEach(b=>b.holdings.forEach(h=>t.add(h.ticker)));
- t.add(BENCH_TICKER); // Always fetch SPY
- return[...t];
-}
-
+function getAllTickers(){let t=new Set();Object.values(buckets).forEach(b=>b.holdings.forEach(h=>t.add(h.ticker)));t.add(BENCH_TICKER);return[...t];}
 function dailyChange(ticker,shares){let p=prices[ticker];if(!p||!p.prev||shares<=0)return 0;return shares*(p.price-p.prev);}
 
 function getPortfolioStats(){
@@ -253,11 +247,14 @@ function getPortfolioStats(){
  return{totalCost,totalValue,pl:totalValue-totalCost,plPct:totalCost>0?((totalValue-totalCost)/totalCost*100):0,totalDay,dayPct:totalValue>0?(totalDay/totalValue*100):0,bs,benchValue};
 }
 
-function recordSnapshot(){
+/* ── SNAPSHOT: force=true skips cooldown; no cooldown if <2 points; 30s otherwise ── */
+function recordSnapshot(force){
  let stats=getPortfolioStats();if(stats.totalCost<=0)return;
- let now=Date.now();if(valueHistory.length>0&&now-valueHistory[valueHistory.length-1].ts<3*60*1000)return;
+ let now=Date.now();
+ if(!force&&valueHistory.length>=2&&now-valueHistory[valueHistory.length-1].ts<30*1000)return;
  valueHistory.push({ts:now,value:stats.totalValue,cost:stats.totalCost,bench:stats.benchValue});
- if(valueHistory.length>300)valueHistory=valueHistory.slice(-300);saveState();
+ if(valueHistory.length>500)valueHistory=valueHistory.slice(-500);
+ saveState();
 }
 
 let retryScheduled=false;
@@ -278,7 +275,7 @@ window.fetchAllPrices=function(){
   if(data.cached)msg+=' · cached';if(filled>0)msg+=' · '+filled+' filled';
   if(failed.length)msg+=' · failed: '+failed.slice(0,5).join(', ')+(failed.length>5?'…':'');
   document.getElementById('statusBar').innerHTML=msg;
-  recordSnapshot();renderAll();
+  recordSnapshot(false);renderAll();
   if(failed.length>0&&!retryScheduled){retryScheduled=true;setTimeout(()=>{retryScheduled=false;window.fetchAllPrices();},25000);}
  }).catch(err=>{
   document.getElementById('statusBar').innerHTML='⚠️ '+err.message+'. Retrying...';renderAll();
@@ -317,12 +314,13 @@ window.allocateFunds=function(){
    posDelta[key][h.ticker]={shares:addS,costBasis:holdAmt};
   });
  });
- // Track benchmark: buy SPY shares with same total amount
- let sp=prices[BENCH_TICKER];
- let benchDelta=0;
+ let sp=prices[BENCH_TICKER];let benchDelta=0;
  if(sp&&sp.price>0){benchDelta=amt/sp.price;benchShares+=benchDelta;}
  allocLog.unshift({date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),amount:amt,core:c,satellite:s,growth:g,cash:ca,note,posDelta,benchDelta});
- saveState();renderAll();document.getElementById('cashInput').value='';document.getElementById('noteInput').value='';
+ saveState();
+ recordSnapshot(true); /* Force snapshot immediately on allocation */
+ renderAll();
+ document.getElementById('cashInput').value='';document.getElementById('noteInput').value='';
  let u=[...new Set(noPT)];
  if(u.length>0)toast(fmt(amt)+' allocated! ⚠️ No price: '+u.join(', '),'err');
  else toast(fmt(amt)+' allocated!','ok');
@@ -452,39 +450,30 @@ function renderValueChart(){
  let minT=times[0],maxT=times[times.length-1],tR=maxT-minT||1;
  let xP=i=>pad.left+(times[i]-minT)/tR*pW;let yP=v=>pad.top+(1-(v-minY)/(maxY-minY))*pH;
  ctx.clearRect(0,0,W,H);
-
- // Grid
  ctx.textAlign='right';ctx.textBaseline='middle';ctx.font='11px Inter,sans-serif';
  for(let i=0;i<=4;i++){let yy=pad.top+pH*i/4;let val=maxY-(maxY-minY)*i/4;ctx.strokeStyle='rgba(39,51,84,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.left,yy);ctx.lineTo(W-pad.right,yy);ctx.stroke();ctx.fillStyle='#5c6b8a';ctx.fillText('$'+val.toLocaleString('en-US',{maximumFractionDigits:0}),pad.left-6,yy);}
  ctx.textAlign='center';ctx.textBaseline='top';let nL=Math.min(valueHistory.length,5);
  for(let j=0;j<nL;j++){let idx=Math.floor(j*(valueHistory.length-1)/Math.max(nL-1,1));let d=new Date(times[idx]);ctx.fillStyle='#5c6b8a';ctx.fillText(d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),xP(idx),pad.top+pH+8);}
-
- // Cost basis dashed line
+ // Cost basis dashed
  ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(148,163,200,.25)';ctx.lineWidth=1.5;
  ctx.beginPath();costs.forEach((c,i)=>{i===0?ctx.moveTo(xP(i),yP(c)):ctx.lineTo(xP(i),yP(c));});ctx.stroke();ctx.setLineDash([]);
-
- // S&P 500 benchmark line (orange)
+ // S&P 500 benchmark (orange dashed)
  ctx.strokeStyle='rgba(245,158,11,0.7)';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
  ctx.setLineDash([8,4]);
  ctx.beginPath();benchs.forEach((b,i)=>{i===0?ctx.moveTo(xP(i),yP(b)):ctx.lineTo(xP(i),yP(b));});ctx.stroke();ctx.setLineDash([]);
-
- // Portfolio value fill
+ // Portfolio fill
  let lastPL=vals[vals.length-1]-costs[costs.length-1];let gc=lastPL>=0?[16,185,129]:[239,68,68];
  let grad=ctx.createLinearGradient(0,pad.top,0,pad.top+pH);grad.addColorStop(0,'rgba('+gc.join(',')+',0.18)');grad.addColorStop(1,'rgba('+gc.join(',')+',0)');
  ctx.beginPath();ctx.moveTo(xP(0),yP(vals[0]));vals.forEach((v,i)=>{if(i>0)ctx.lineTo(xP(i),yP(v));});ctx.lineTo(xP(vals.length-1),pad.top+pH);ctx.lineTo(xP(0),pad.top+pH);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-
- // Portfolio value line (green/red)
+ // Portfolio line
  ctx.strokeStyle=lastPL>=0?'#10b981':'#ef4444';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
  ctx.beginPath();vals.forEach((v,i)=>{i===0?ctx.moveTo(xP(i),yP(v)):ctx.lineTo(xP(i),yP(v));});ctx.stroke();
-
  // End dots
  let lx=xP(vals.length-1),ly=yP(vals[vals.length-1]);
  ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fillStyle=lastPL>=0?'#10b981':'#ef4444';ctx.fill();
- // Bench end dot
  let bly=yP(benchs[benchs.length-1]);
  ctx.beginPath();ctx.arc(lx,bly,3.5,0,Math.PI*2);ctx.fillStyle='#f59e0b';ctx.fill();
-
- // Chart info below
+ // Info below chart
  let lastVal=vals[vals.length-1],lastCost=costs[costs.length-1],lastBench=benchs[benchs.length-1];
  let portPL=lastVal-lastCost,portPct=lastCost>0?((portPL/lastCost)*100):0;
  let benchPL=lastBench-lastCost,benchPct=lastCost>0?((benchPL/lastCost)*100):0;
